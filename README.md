@@ -35,4 +35,4 @@ Hallucinated hazard data is the top reason scientists abandon AI safety tools, s
 
 ## License
 
-TBD — open source license to be added before submission.
+[MIT](LICENSE)
