@@ -25,8 +25,8 @@ PreCaution is strictly a **defensive safety-checking tool**. It reads a procedur
 
 Hallucinated hazard data is the top reason scientists abandon AI safety tools, so nothing here is left to a model's memory:
 
-- **Per-chemical hazards** — resolved via [PubChem](https://pubchem.ncbi.nlm.nih.gov/) (PUG-REST for name → CID, PUG-View for GHS classification and Laboratory Chemical Safety Summary data). Every hazard links to its PubChem record.
-- **Interaction verdicts** — never free-form model output. Claude identifies which chemicals meet in which step and classifies them into reactive groups; the actual danger verdict comes from a compact, hand-encoded reactive-group matrix built from [NOAA CAMEO Chemicals](https://cameochemicals.noaa.gov/) (primary authority) with the EPA hazardous-waste compatibility chart (EPA-600/2-80-076) as backstop.
+- **Per-chemical hazards** — resolved via [PubChem](https://pubchem.ncbi.nlm.nih.gov/) (PUG-REST for name → CID, PUG-View for GHS classification, PPE, first aid, and disposal/storage guidance). Every hazard links to its PubChem record.
+- **Interaction verdicts** — never free-form model output. Claude identifies which chemicals meet in which step; each chemical's reactive-group classification is pulled live from PubChem (itself sourced from [NOAA CAMEO Chemicals](https://cameochemicals.noaa.gov/)); the actual danger verdict for a given pair of reactive groups comes from a compact, hand-encoded table built from CAMEO (primary authority) with the EPA hazardous-waste compatibility chart (EPA-600/2-80-076) as backstop. PubChem is the only live dependency.
 - **Missing data is never silent.** If no authoritative hazard data exists for a chemical, the brief says so explicitly rather than implying it's safe.
 
 ## Status
