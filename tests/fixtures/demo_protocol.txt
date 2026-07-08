@@ -1,0 +1,5 @@
+1. Prepare piranha solution by slowly adding 30 mL of 30% hydrogen peroxide to 90 mL of concentrated sulfuric acid in a glass beaker inside the fume hood.
+2. Submerge glass coverslips in the piranha solution for 15 minutes to strip organic residue.
+3. Rinse the coverslips thoroughly with deionized water and dry under a stream of nitrogen.
+4. Pour the spent piranha solution into the acid waste carboy.
+5. Rinse the glassware used for the protein purification buffer (PBS with 0.02% sodium azide) and add that rinse to the same acid waste carboy.

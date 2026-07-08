@@ -23,6 +23,17 @@ build/
 .turbo/
 .vercel/
 
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# PubChem response cache (speeds up dev + protects the demo from live network blips)
+.cache/
+
 # Logs
 *.log
 npm-debug.log*
