@@ -1,0 +1,28 @@
+# Private docs (context, roadmap, sprint notes) — never pushed
+private/
+*.private.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Node
+node_modules/
+dist/
+build/
+.next/
+.turbo/
+.vercel/
+
+# Logs
+*.log
+npm-debug.log*
