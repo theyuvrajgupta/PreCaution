@@ -269,38 +269,51 @@ def get_safety_note(cid: int, heading: str) -> SafetyNote | None:
 def ground_chemical(canonical_name: str) -> ChemicalHazardProfile:
     """The main entry point: canonical chemical name -> full hazard profile.
 
-    Never raises on missing data — a chemical PubChem doesn't recognize, or
-    a heading with nothing in it, is a normal, explicitly-recorded outcome
-    (found=False / missing_sections), not an exception.
+    Never raises. Two distinct "no data" outcomes, kept honestly separate:
+      - found=False, grounding_error=None: PubChem was reached and has no
+        record for this name (a definitive, confirmed absence).
+      - found=False, grounding_error=<message>: grounding could not be
+        COMPLETED (network outage, PubChem 5xx after retries exhausted —
+        see _get_json). Hazard status is UNKNOWN here, not confirmed
+        absent — callers must not treat this the same as a real 404. A
+        transient failure on one chemical must never masquerade as "this
+        chemical doesn't exist," and must never crash the whole pipeline.
     """
-    cid = resolve_cid(canonical_name)
-    if cid is None:
-        return ChemicalHazardProfile(query_name=canonical_name, found=False, missing_sections=["CID resolution"])
+    try:
+        cid = resolve_cid(canonical_name)
+        if cid is None:
+            return ChemicalHazardProfile(query_name=canonical_name, found=False, missing_sections=["CID resolution"])
 
-    profile = ChemicalHazardProfile(
-        query_name=canonical_name,
-        found=True,
-        cid=cid,
-        pubchem_url=f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}",
-    )
+        profile = ChemicalHazardProfile(
+            query_name=canonical_name,
+            found=True,
+            cid=cid,
+            pubchem_url=f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}",
+        )
 
-    ghs = get_ghs_classification(cid)
-    if ghs is not None:
-        profile.ghs = ghs
-    else:
-        profile.missing_sections.append("GHS Classification")
-
-    reactive_groups = get_reactive_groups(cid)
-    if reactive_groups:
-        profile.reactive_groups = reactive_groups
-    else:
-        profile.missing_sections.append("Reactive Group")
-
-    for heading in SAFETY_NOTE_HEADINGS:
-        note = get_safety_note(cid, heading)
-        if note is not None:
-            profile.safety_notes.append(note)
+        ghs = get_ghs_classification(cid)
+        if ghs is not None:
+            profile.ghs = ghs
         else:
-            profile.missing_sections.append(heading)
+            profile.missing_sections.append("GHS Classification")
 
-    return profile
+        reactive_groups = get_reactive_groups(cid)
+        if reactive_groups:
+            profile.reactive_groups = reactive_groups
+        else:
+            profile.missing_sections.append("Reactive Group")
+
+        for heading in SAFETY_NOTE_HEADINGS:
+            note = get_safety_note(cid, heading)
+            if note is not None:
+                profile.safety_notes.append(note)
+            else:
+                profile.missing_sections.append(heading)
+
+        return profile
+    except (httpx.HTTPError, RuntimeError) as exc:
+        # RuntimeError: _get_json exhausted its retries on a transient network/5xx
+        # failure. httpx.HTTPError: an uncaught non-404/non-5xx status from
+        # resp.raise_for_status(). Isolate the failure to this one chemical rather
+        # than letting it take down the whole pipeline run.
+        return ChemicalHazardProfile(query_name=canonical_name, found=False, grounding_error=str(exc))

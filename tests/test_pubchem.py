@@ -122,6 +122,43 @@ def test_get_json_raises_after_exhausting_retries(monkeypatch, tmp_path):
         pubchem._get_json("https://example.invalid/x")
 
 
+def test_ground_chemical_survives_pubchem_outage(monkeypatch):
+    """A genuine PubChem outage (not a 404 'not found') must not crash the caller —
+    it must isolate to this one chemical and record it honestly as unknown, not absent."""
+
+    def _always_raises(name):
+        raise RuntimeError("PubChem request failed after 3 attempts: https://example.invalid/x")
+
+    monkeypatch.setattr(pubchem, "resolve_cid", _always_raises)
+
+    profile = pubchem.ground_chemical("hydrogen peroxide")  # must not raise
+
+    assert profile.found is False
+    assert profile.cid is None
+    assert profile.grounding_error is not None
+    assert "failed after 3 attempts" in profile.grounding_error
+
+
+def test_grounding_error_distinct_from_not_found(monkeypatch):
+    """found=False must mean two different things distinguishably: 'PubChem confirms this
+    doesn't exist' (grounding_error=None) vs 'we don't know, the network failed'
+    (grounding_error set). A network failure must never masquerade as confirmed absence.
+    Both cases mocked — this must stay offline, not a live network call."""
+    monkeypatch.setattr(pubchem, "resolve_cid", lambda name: None)  # simulates a clean 404
+    not_found_profile = pubchem.ground_chemical("definitely-not-a-real-chemical-xyzzy-12345")
+    assert not_found_profile.found is False
+    assert not_found_profile.grounding_error is None
+    assert not_found_profile.missing_sections == ["CID resolution"]
+
+    def _always_raises(name):
+        raise RuntimeError("PubChem request failed after 3 attempts: https://example.invalid/x")
+
+    monkeypatch.setattr(pubchem, "resolve_cid", _always_raises)
+    outage_profile = pubchem.ground_chemical("hydrogen peroxide")
+    assert outage_profile.found is False
+    assert outage_profile.grounding_error is not None
+
+
 def _network_available() -> bool:
     try:
         httpx.get("https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/water/cids/JSON", timeout=5)

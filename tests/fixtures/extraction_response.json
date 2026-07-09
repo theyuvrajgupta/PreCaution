@@ -1,0 +1,206 @@
+{
+  "chemicals": [
+    {
+      "id": "c1",
+      "as_written": "30% hydrogen peroxide",
+      "canonical_name": "hydrogen peroxide",
+      "concentration": "30%",
+      "physical_state": "aqueous solution",
+      "cas_number": null,
+      "role": "oxidizer",
+      "notes": "Combined with sulfuric acid to form piranha solution.",
+      "resolution_reasoning": "Directly named as '30% hydrogen peroxide' in step 1; concentration '30%' stripped from canonical name and placed in the concentration field."
+    },
+    {
+      "id": "c2",
+      "as_written": "concentrated sulfuric acid",
+      "canonical_name": "sulfuric acid",
+      "concentration": "concentrated",
+      "physical_state": "liquid",
+      "cas_number": null,
+      "role": "reagent",
+      "notes": "Combined with hydrogen peroxide to form piranha solution.",
+      "resolution_reasoning": "Directly named as 'concentrated sulfuric acid' in step 1; qualifier 'concentrated' moved to concentration field, leaving 'sulfuric acid' as canonical name."
+    },
+    {
+      "id": "c3",
+      "as_written": "deionized water",
+      "canonical_name": "water",
+      "concentration": null,
+      "physical_state": "liquid",
+      "cas_number": null,
+      "role": "rinsing agent",
+      "notes": null,
+      "resolution_reasoning": "Named directly in step 3 as 'deionized water'; qualifier 'deionized' kept implicit in as_written but canonical name normalized to 'water' for lookup purposes."
+    },
+    {
+      "id": "c4",
+      "as_written": "nitrogen",
+      "canonical_name": "nitrogen",
+      "concentration": null,
+      "physical_state": "gas",
+      "cas_number": null,
+      "role": "drying agent",
+      "notes": "Used as a stream/gas to dry coverslips.",
+      "resolution_reasoning": "Directly named in step 3 as 'a stream of nitrogen'; identified as elemental nitrogen gas used for drying, no qualifiers to strip beyond physical state."
+    },
+    {
+      "id": "c5",
+      "as_written": "PBS",
+      "canonical_name": "phosphate-buffered saline",
+      "concentration": null,
+      "physical_state": "aqueous solution",
+      "cas_number": null,
+      "role": "buffer",
+      "notes": "Component of the protein purification buffer mentioned in step 5.",
+      "resolution_reasoning": "PBS is a standard named buffer (phosphate-buffered saline) explicitly mentioned in step 5 as part of 'PBS with 0.02% sodium azide'; extracted as its own chemical entity since it is a defined buffer formulation, distinct from sodium azide which is dissolved in it."
+    },
+    {
+      "id": "c6",
+      "as_written": "0.02% sodium azide",
+      "canonical_name": "sodium azide",
+      "concentration": "0.02%",
+      "physical_state": "solid",
+      "cas_number": null,
+      "role": "preservative",
+      "notes": "Preservative added to PBS buffer used in protein purification.",
+      "resolution_reasoning": "Extracted separately from PBS per instructions to decompose named buffers into constituent chemicals; concentration '0.02%' stripped into concentration field, canonical name normalized to 'sodium azide'."
+    }
+  ],
+  "steps": [
+    {
+      "number": 1,
+      "text": "Prepare piranha solution by slowly adding 30 mL of 30% hydrogen peroxide to 90 mL of concentrated sulfuric acid in a glass beaker inside the fume hood.",
+      "operations": [
+        "add_dropwise",
+        "mix"
+      ],
+      "vessel": "glass beaker",
+      "conditions": "inside fume hood",
+      "chemicals_present": [
+        {
+          "chemical_id": "c1",
+          "origin": "added"
+        },
+        {
+          "chemical_id": "c2",
+          "origin": "added"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "text": "Submerge glass coverslips in the piranha solution for 15 minutes to strip organic residue.",
+      "operations": [
+        "submerge",
+        "soak"
+      ],
+      "vessel": "glass beaker",
+      "conditions": "15 minutes",
+      "chemicals_present": [
+        {
+          "chemical_id": "c1",
+          "origin": "carried_over"
+        },
+        {
+          "chemical_id": "c2",
+          "origin": "carried_over"
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "text": "Rinse the coverslips thoroughly with deionized water and dry under a stream of nitrogen.",
+      "operations": [
+        "rinse",
+        "dry"
+      ],
+      "vessel": null,
+      "conditions": null,
+      "chemicals_present": [
+        {
+          "chemical_id": "c3",
+          "origin": "added"
+        },
+        {
+          "chemical_id": "c4",
+          "origin": "added"
+        },
+        {
+          "chemical_id": "c1",
+          "origin": "residual"
+        },
+        {
+          "chemical_id": "c2",
+          "origin": "residual"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "text": "Pour the spent piranha solution into the acid waste carboy.",
+      "operations": [
+        "transfer_to_waste"
+      ],
+      "vessel": "acid waste carboy",
+      "conditions": null,
+      "chemicals_present": [
+        {
+          "chemical_id": "c1",
+          "origin": "added"
+        },
+        {
+          "chemical_id": "c2",
+          "origin": "added"
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "text": "Rinse the glassware used for the protein purification buffer (PBS with 0.02% sodium azide) and add that rinse to the same acid waste carboy.",
+      "operations": [
+        "rinse",
+        "transfer_to_waste"
+      ],
+      "vessel": "acid waste carboy",
+      "conditions": null,
+      "chemicals_present": [
+        {
+          "chemical_id": "c5",
+          "origin": "added"
+        },
+        {
+          "chemical_id": "c6",
+          "origin": "added"
+        },
+        {
+          "chemical_id": "c1",
+          "origin": "carried_over"
+        },
+        {
+          "chemical_id": "c2",
+          "origin": "carried_over"
+        }
+      ]
+    }
+  ],
+  "recognized_mixtures": [
+    {
+      "as_written": "piranha solution",
+      "constituent_chemical_ids": [
+        "c1",
+        "c2"
+      ],
+      "reasoning": "Piranha solution is the well-known name for the mixture formed by combining hydrogen peroxide and concentrated sulfuric acid in step 1; it is not an independently sourced chemical but the resulting mixture of c1 and c2."
+    },
+    {
+      "as_written": "protein purification buffer",
+      "constituent_chemical_ids": [
+        "c5",
+        "c6"
+      ],
+      "reasoning": "The 'protein purification buffer' is explicitly described as 'PBS with 0.02% sodium azide', i.e., a named solution composed of the buffer PBS (c5) and the preservative sodium azide (c6), rather than a separate chemical to look up."
+    }
+  ],
+  "unresolved_mentions": []
+}

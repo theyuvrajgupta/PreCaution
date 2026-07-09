@@ -135,3 +135,86 @@ class ChemicalHazardProfile(BaseModel):
         description="Headings that were queried but PubChem had no data for. Feeds the honest-omission rule — "
         "never inferred as 'safe', always surfaced.",
     )
+    grounding_error: str | None = Field(
+        default=None,
+        description="Set only when grounding could not be COMPLETED due to a transient failure (network outage / "
+        "PubChem 5xx after retries exhausted). Means hazard status is UNKNOWN, not confirmed absent — distinct "
+        "from found=False with this field None, which is a definitive PubChem 'no record'. A network failure "
+        "must never masquerade as 'this chemical doesn't exist'.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Stage 4: the control layer / brief rendering (see private/Build_Spec.md §4).
+# A Brief is pure composition over ChemicalHazardProfile + ChemicalPairFinding
+# — no new grounding, no model call. Every BriefStatement must carry a
+# resolvable source_ref; that's the whole trust contract for this stage,
+# enforced as a test (tests/test_brief.py), not just an assertion.
+# ---------------------------------------------------------------------------
+
+BriefKind = Literal[
+    "hazard_identity",
+    "precautionary",
+    "ppe",
+    "first_aid",
+    "disposal",
+    "storage",
+    "interaction_hazard",
+    "interaction_no_data",
+    "step_context",
+    "limitation_disclosure",
+    "no_data",
+    "grounding_incomplete",
+]
+
+
+class BriefStatement(BaseModel):
+    text: str = Field(description="The rendered statement text. Composed from a source field, never invented.")
+    kind: BriefKind
+    source_ref: str = Field(description="Human-readable provenance. Always non-empty — this is the trust contract.")
+    source_url: str | None = Field(default=None, description="Clickable link, when the source has one.")
+    unverified: bool = Field(
+        default=False,
+        description="True only for 'step_context': this came from extraction (Claude reading the protocol), "
+        "not from an independent grounding source. See Build_Spec.md §3.3.",
+    )
+    step_numbers: list[int] = Field(
+        default_factory=list,
+        description="Every step this statement applies to, in order. Set for step-scoped kinds "
+        "(interaction_*, step_context). Empty means not step-scoped. A hazard that persists across "
+        "steps (the same pair still co-present) carries every one of those step numbers here, in ONE "
+        "statement — never one near-duplicate statement per step.",
+    )
+    chemical_ids: list[str] = Field(
+        default_factory=list, description="Chemical.id value(s) this statement concerns."
+    )
+    pair: tuple[str, str] | None = Field(
+        default=None, description="(chemical_a_id, chemical_b_id) for interaction_* kinds."
+    )
+
+
+class BriefStep(BaseModel):
+    number: int
+    text: str
+    vessel: str | None = Field(default=None, description="From Step.vessel — drives the carryover thread's vessel-change tick (UI_Design_Spec.md §6.1).")
+    chemicals: list[StepChemicalRef] = Field(
+        default_factory=list,
+        description="Every chemical present this step, with origin (added/carried_over/residual) — this is "
+        "what the carryover thread draws: a token at 'added', a continuing line at 'carried_over'. Same data "
+        "as Step.chemicals_present, carried through unchanged.",
+    )
+    chemical_ids: list[str] = Field(description="From Step.chemicals_present — lets a UI group statements per step.")
+
+
+class Brief(BaseModel):
+    statements: list[BriefStatement] = Field(default_factory=list)
+    steps: list[BriefStep] = Field(default_factory=list)
+    incomplete: bool = Field(
+        default=False,
+        description="True if grounding could not be completed for at least one chemical (see "
+        "ChemicalHazardProfile.grounding_error). Computed once here so the UI never has to inspect profiles "
+        "itself — it stays a thin renderer with no logic of its own.",
+    )
+    incomplete_chemicals: list[str] = Field(
+        default_factory=list, description="canonical_name of every chemical whose grounding_error is set."
+    )

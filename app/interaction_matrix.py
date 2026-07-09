@@ -71,7 +71,7 @@ _add(
         "classic 'piranha solution' hazard pathway (hydrogen peroxide + sulfuric acid)."
     ),
     source_url="https://cameochemicals.noaa.gov/react/44",
-    source_detail="CAMEO Chemicals reactive group datasheet: Oxidizing Agents, Strong",
+    source_detail="Oxidizing Agents, Strong",
 )
 
 _add(
@@ -83,7 +83,7 @@ _add(
         "(hydrazoic acid) with potential for an explosive combination."
     ),
     source_url="https://cameochemicals.noaa.gov/react/8",
-    source_detail="CAMEO Chemicals reactive group datasheet: Azo, Diazo, Azido, Hydrazine, and Azide Compounds",
+    source_detail="Azo, Diazo, Azido, Hydrazine, and Azide Compounds",
 )
 
 _add(
@@ -95,7 +95,7 @@ _add(
         "(hydrazoic acid)."
     ),
     source_url="https://cameochemicals.noaa.gov/react/8",
-    source_detail="CAMEO Chemicals reactive group datasheet: Azo, Diazo, Azido, Hydrazine, and Azide Compounds",
+    source_detail="Azo, Diazo, Azido, Hydrazine, and Azide Compounds",
 )
 
 
