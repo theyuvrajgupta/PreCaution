@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PreCaution</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app" id="app" data-state="empty">
+    <section class="pane pane-bench" aria-label="Protocol">
+      <div class="bench-gutter" aria-hidden="true" id="bench-gutter"></div>
+      <div class="bench-content">
+        <p class="eyebrow">PROTOCOL</p>
+        <textarea
+          id="protocol-input"
+          class="protocol-input"
+          aria-label="Protocol text"
+          placeholder="Paste an experimental protocol..."
+          autofocus
+        ></textarea>
+        <div class="bench-controls" id="bench-controls">
+          <button type="button" id="demo-btn" class="btn btn-quiet">Load the demo protocol</button>
+          <button type="button" id="read-btn" class="btn btn-primary" disabled>Read the protocol</button>
+        </div>
+        <div id="bench-steps" class="bench-steps" hidden></div>
+      </div>
+    </section>
+
+    <section class="pane pane-paper" aria-label="Safety brief">
+      <div id="paper-empty" class="paper-panel paper-empty">
+        <p class="eyebrow">PRECAUTION</p>
+        <p class="empty-copy">Paste a protocol. PreCaution reads the steps, not just the reagents.</p>
+      </div>
+
+      <div id="stage-log" class="paper-panel stage-log" hidden></div>
+
+      <div id="receipt" class="paper-panel receipt" hidden></div>
+
+      <div id="incomplete-banner" class="paper-panel incomplete-banner" hidden></div>
+
+      <div id="brief-output" class="paper-panel brief-output" hidden></div>
+
+      <div id="failed-panel" class="paper-panel failed-panel" hidden></div>
+    </section>
+  </div>
+
+  <footer class="app-footer">
+    Every hazard claim above was fetched from a source, not written by a model. Claude read the
+    protocol. Claude did not write the safety advice.
+  </footer>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
