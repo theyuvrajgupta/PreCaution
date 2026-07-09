@@ -26,8 +26,21 @@ PreCaution is strictly a **defensive safety-checking tool**. It reads a procedur
 Hallucinated hazard data is the top reason scientists abandon AI safety tools, so nothing here is left to a model's memory:
 
 - **Per-chemical hazards** — resolved via [PubChem](https://pubchem.ncbi.nlm.nih.gov/) (PUG-REST for name → CID, PUG-View for GHS classification, PPE, first aid, and disposal/storage guidance). Every hazard links to its PubChem record.
-- **Interaction verdicts** — never free-form model output. Claude identifies which chemicals meet in which step; each chemical's reactive-group classification is pulled live from PubChem (itself sourced from [NOAA CAMEO Chemicals](https://cameochemicals.noaa.gov/)); the actual danger verdict for a given pair of reactive groups comes from a compact, hand-encoded table built from CAMEO (primary authority) with the EPA hazardous-waste compatibility chart (EPA-600/2-80-076) as backstop. PubChem is the only live dependency.
+- **Interaction verdicts** — never free-form model output. Claude identifies which chemicals meet in which step; each chemical's reactive-group classification is pulled live from PubChem (itself sourced from [NOAA CAMEO Chemicals](https://cameochemicals.noaa.gov/)); the actual danger verdict for a given pair of reactive groups comes from a compact, hand-encoded table built directly from CAMEO's own reactive-group datasheets — every entry fetched and quoted at build time, never from a model's general chemistry knowledge. PubChem is the only live dependency.
 - **Missing data is never silent.** If no authoritative hazard data exists for a chemical, the brief says so explicitly rather than implying it's safe.
+
+## Running it
+
+```bash
+python -m venv .venv
+.venv/Scripts/activate        # Windows; use .venv/bin/activate on macOS/Linux
+pip install -r requirements.txt
+cp .env.example .env          # fill in ANTHROPIC_API_KEY
+uvicorn app.main:app --reload
+```
+
+Then open `http://127.0.0.1:8000` — paste a protocol (or load the built-in demo) and click
+**Read the protocol**.
 
 ## Status
 
