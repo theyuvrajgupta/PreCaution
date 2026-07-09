@@ -46,6 +46,14 @@ Then open `http://127.0.0.1:8000` — paste a protocol (or load the built-in dem
 
 🚧 Active build, hackathon week of July 7–13, 2026.
 
+## Acknowledgments
+
+Built collaboratively with [Claude Code](https://claude.com/claude-code) — architecture,
+implementation, and testing across all four pipeline stages and the web UI were developed in
+an interactive session with Claude. That collaboration is itself the subject of this hackathon;
+it doesn't change the tool's own rule that every hazard claim it makes must trace back to
+PubChem or CAMEO, never to model recall.
+
 ## License
 
 [MIT](LICENSE)
