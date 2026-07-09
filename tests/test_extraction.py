@@ -5,7 +5,9 @@ Two tiers:
   captured live response against the ExtractionResult schema, guarding
   the parse/validation layer independent of the network.
 - test_live_extraction_on_demo_protocol: real API call against the locked
-  demo protocol. Skipped automatically if ANTHROPIC_API_KEY isn't set.
+  demo protocol. Marked `costly` (spends real Anthropic budget) so it's
+  excluded from the default `pytest` run (see pytest.ini) — opt in with
+  `pytest -m costly`. Also skips if ANTHROPIC_API_KEY isn't set.
 """
 
 import json
@@ -35,6 +37,7 @@ def test_offline_fixture_validates():
     assert "sodium azide" in canonical_names
 
 
+@pytest.mark.costly
 @pytest.mark.skipif(not get_settings().anthropic_api_key, reason="ANTHROPIC_API_KEY not set")
 def test_live_extraction_on_demo_protocol():
     from app.extraction import extract

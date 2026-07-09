@@ -47,7 +47,6 @@ def extract(protocol_text: str) -> ExtractionResult:
     response = client.messages.create(
         model=settings.precaution_model,
         max_tokens=4096,
-        temperature=0,
         system=_load_system_prompt(),
         tools=[tool],
         tool_choice={"type": "tool", "name": _TOOL_NAME},
