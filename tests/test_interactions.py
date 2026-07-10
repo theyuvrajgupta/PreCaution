@@ -36,12 +36,14 @@ def _demo_extraction_result() -> ExtractionResult:
             id="c1",
             as_written="30% hydrogen peroxide",
             canonical_name="hydrogen peroxide",
+            concentration="30%",
             resolution_reasoning="Directly named; concentration split into its own field.",
         ),
         Chemical(
             id="c2",
             as_written="concentrated sulfuric acid",
             canonical_name="sulfuric acid",
+            concentration="concentrated",
             resolution_reasoning="Directly named; qualifier split into its own field.",
         ),
         Chemical(
@@ -105,6 +107,29 @@ def test_step5_waste_stream_hazard_found_via_carried_over():
     # The whole point: this hazard is only visible because carried_over is tracked.
     origins = {finding.origin_a, finding.origin_b}
     assert origins == {"added", "carried_over"}
+
+
+def test_concentration_round_trips_onto_the_finding():
+    """Chemical.concentration is captured at extraction; ChemicalPairFinding must carry
+    it through untouched so app/brief.py can show it, without this module's own hazard
+    logic ever reading it (the verdict is identical regardless of concentration)."""
+    result = _demo_extraction_result()
+    profiles = {
+        "hydrogen peroxide": _profile("hydrogen peroxide", 784, "Oxidizing Agents, Strong"),
+        "sulfuric acid": _profile("sulfuric acid", 1118, "Acids, Strong Oxidizing"),
+        "sodium azide": _profile("sodium azide", 33557, "Azo, Diazo, Azido, Hydrazine, and Azide Compounds"),
+    }
+    findings = find_step_interactions(result, profiles)
+
+    step1_finding = next(f for f in findings if f.step_number == 1)
+    assert step1_finding.concentration_a == "30%"  # c1 = hydrogen peroxide
+    assert step1_finding.concentration_b == "concentrated"  # c2 = sulfuric acid
+
+    step5_finding = next(f for f in findings if f.step_number == 5)
+    # c3 = sodium azide has no concentration set in this scaffold, and c2 = sulfuric
+    # acid's carries through unchanged regardless of which side of the pair it's on.
+    assert step5_finding.concentration_a is None
+    assert step5_finding.concentration_b == "concentrated"
 
 
 def test_missing_reactive_group_data_is_surfaced_not_silent():

@@ -63,6 +63,13 @@ class ChemicalPairFinding(BaseModel):
         "would wrongly imply it's been in this vessel the whole time.",
     )
     vessel_entry_step_b: int | None = Field(default=None, description="Same as vessel_entry_step_a, for chemical_b.")
+    concentration_a: str | None = Field(
+        default=None,
+        description="Chemical.concentration as extraction captured it (e.g. '0.02%', 'concentrated'). Carried "
+        "through so app/brief.py can name it next to the chemical — it is NOT used anywhere in this module's "
+        "own hazard logic; the verdict is identical regardless of concentration (see README limitations).",
+    )
+    concentration_b: str | None = Field(default=None, description="Same as concentration_a, for chemical_b.")
     status: Literal["hazard_found", "no_established_data", "insufficient_reactive_group_data"]
     verdict: InteractionVerdict | None = None
     note: str | None = None
@@ -181,6 +188,8 @@ def find_step_interactions(
                 vessel=step.vessel,
                 vessel_entry_step_a=_find_vessel_entry_step(chem_a.id, step.number, result.steps),
                 vessel_entry_step_b=_find_vessel_entry_step(chem_b.id, step.number, result.steps),
+                concentration_a=chem_a.concentration,
+                concentration_b=chem_b.concentration,
             )
 
             if not groups_a or not groups_b:
