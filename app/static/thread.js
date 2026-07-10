@@ -181,9 +181,15 @@ function drawGutter(gutterEl, stepsEl, steps, onsetAt, hotSegments) {
     gutterEl.appendChild(line);
   }
 
-  // Tokens: chemicals entering ("added") this step.
+  // Tokens: chemicals entering ("added") this step. Sorted by chemical_id — extraction's
+  // chemicals_present order is Claude's read of the protocol text and isn't guaranteed
+  // stable across runs, which made the gutter token order flip between otherwise-identical
+  // renders (cosmetic, but the demo is recorded exactly once).
   for (const step of steps) {
-    const added = step.chemicals.filter((c) => c.origin === "added");
+    const added = step.chemicals
+      .filter((c) => c.origin === "added")
+      .slice()
+      .sort((a, b) => a.chemical_id.localeCompare(b.chemical_id));
     const center = centerByStep.get(step.number);
     if (center === undefined) continue;
     added.forEach((c, i) => {
