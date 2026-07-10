@@ -44,11 +44,25 @@ class ChemicalPairFinding(BaseModel):
     origin_b: Literal["added", "carried_over", "residual"]
     added_step_a: int | None = Field(
         default=None,
-        description="Most recent step <= step_number where chemical_a's origin was 'added' — i.e. when it "
-        "actually entered this vessel. Equals step_number when origin_a=='added'. None if it was never "
-        "explicitly 'added' per extraction (a residual/carried_over presence with no recorded origin step).",
+        description="EARLIEST step <= step_number where chemical_a's origin was 'added' — its true point of "
+        "introduction into the protocol. Equals step_number when origin_a=='added' at this step. Deliberately "
+        "the first such tag, not the most recent: a later step re-tagging the chemical 'added' when it's "
+        "poured into a new vessel is a vessel transition (see vessel_entry_step_a), not a second origin "
+        "(2026-07-10 follow-up to the item-1/item-2 audit).",
     )
     added_step_b: int | None = Field(default=None, description="Same as added_step_a, for chemical_b.")
+    vessel: str | None = Field(default=None, description="Step.vessel at step_number — the vessel this pair is "
+        "co-present in.")
+    vessel_entry_step_a: int | None = Field(
+        default=None,
+        description="Most recent step < step_number at which chemical_a is recorded present in the SAME "
+        "vessel as `vessel`, found by walking backward and stopping at the first step it's recorded in a "
+        "DIFFERENT named vessel. None if there's no vessel data to confirm a transition — never guessed. "
+        "Distinct from added_step_a: a chemical can be added in step 1 and only enter the vessel of a later "
+        "finding in some subsequent step (e.g. poured into a waste carboy) — naming the origin step alone "
+        "would wrongly imply it's been in this vessel the whole time.",
+    )
+    vessel_entry_step_b: int | None = Field(default=None, description="Same as vessel_entry_step_a, for chemical_b.")
     status: Literal["hazard_found", "no_established_data", "insufficient_reactive_group_data"]
     verdict: InteractionVerdict | None = None
     note: str | None = None
@@ -65,18 +79,37 @@ def _find_classification(name: str, entries: list[ReactiveGroupEntry], group_nam
 
 
 def _find_added_step(chemical_id: str, up_to_step: int, steps: list) -> int | None:
-    """Most recent step <= up_to_step where this chemical's origin was 'added' — i.e.
-    when it actually entered whatever vessel it's now co-present in. Used to name the
-    origin of a carried-over chemical precisely ("carried over from step 4") instead of
-    leaving the carryover implicit in the thread graphic alone."""
-    found: int | None = None
+    """EARLIEST step <= up_to_step where this chemical's origin was 'added' — the step
+    it truly entered the picture. Stops at the first match rather than the most recent:
+    see ChemicalPairFinding.added_step_a for why (a vessel transfer re-tagged 'added' is
+    not a second origin)."""
     for step in steps:
         if step.number > up_to_step:
             break
         for ref in step.chemicals_present:
             if ref.chemical_id == chemical_id and ref.origin == "added":
-                found = step.number
-    return found
+                return step.number
+    return None
+
+
+def _find_vessel_entry_step(chemical_id: str, up_to_step: int, steps: list) -> int | None:
+    """Most recent step < up_to_step at which this chemical is recorded present in the
+    same vessel it's in at up_to_step, walking backward and stopping at the first step
+    it's recorded in a different named vessel. None if there's no vessel data to place a
+    transition (e.g. Step.vessel unset for the intervening steps) — never guessed."""
+    current_vessel = next((s.vessel for s in steps if s.number == up_to_step), None)
+    if not current_vessel:
+        return None
+    entry_step: int | None = None
+    for step in sorted((s for s in steps if s.number < up_to_step), key=lambda s: s.number, reverse=True):
+        present = any(ref.chemical_id == chemical_id for ref in step.chemicals_present)
+        if not present:
+            continue
+        if step.vessel == current_vessel:
+            entry_step = step.number
+        elif step.vessel:
+            break
+    return entry_step
 
 
 def _no_data_note(
@@ -145,6 +178,9 @@ def find_step_interactions(
                 origin_b=ref_b.origin,
                 added_step_a=_find_added_step(chem_a.id, step.number, result.steps),
                 added_step_b=_find_added_step(chem_b.id, step.number, result.steps),
+                vessel=step.vessel,
+                vessel_entry_step_a=_find_vessel_entry_step(chem_a.id, step.number, result.steps),
+                vessel_entry_step_b=_find_vessel_entry_step(chem_b.id, step.number, result.steps),
             )
 
             if not groups_a or not groups_b:
