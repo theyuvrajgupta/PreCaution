@@ -148,7 +148,15 @@ function renderControlLine(statement) {
 
 function renderScanLayer(brief, chemicalRecords, extractionDetail) {
   const hazards = brief.statements.filter((s) => s.kind === "interaction_hazard");
-  const gaps = brief.statements.filter((s) => s.kind === "interaction_no_data").length;
+  // "Checked, none matched" and "could not check at all" are different epistemic
+  // states (2026-07-11 pre-submission correctness check) — split so the scan layer
+  // never lumps them under one count, same distinction as the aggregate cards below.
+  const checkedGaps = brief.statements.filter(
+    (s) => s.kind === "interaction_no_data" && s.gap_status === "no_established_data"
+  ).length;
+  const uncheckableGaps = brief.statements.filter(
+    (s) => s.kind === "interaction_no_data" && s.gap_status === "insufficient_reactive_group_data"
+  ).length;
   const limitations = brief.statements.filter((s) => s.kind === "limitation_disclosure").length;
 
   // Item 4: "0 chemicals without hazard data" (counting !found) contradicted the body,
@@ -159,6 +167,7 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
   // see Brief.incomplete_chemicals) vs. a confirmed record with no GHS section.
   const failedGrounding = brief.incomplete_chemicals.length;
   const noGhs = chemicalRecords.filter((c) => (c.missing_sections || []).includes("GHS Classification")).length;
+  const grounded = extractionDetail.chemicals - failedGrounding;
 
   const el = document.createElement("div");
   el.className = "scan-layer rise-in";
@@ -169,8 +178,24 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
     signal.style.color = "var(--danger)";
     signal.textContent = "▰ DANGER";
   } else {
+    // Pre-submission correctness check, 2026-07-11: most protocols a Gladstone
+    // researcher pastes will hit none of our 3 matrix entries, making this the
+    // single most likely page a judge sees. "NO INTERACTION HAZARDS FOUND" reads
+    // in the same spirit as the banned "no risks found" even though it isn't the
+    // literal phrase — an absence-of-finding headline, not a checked-and-found-
+    // nothing one. Reworded, and paired with an explicit caveat line below so
+    // this can never be misread as a safety claim.
     signal.style.color = "var(--muted-paper)";
-    signal.textContent = "▰ NO INTERACTION HAZARDS FOUND";
+    signal.textContent = "▰ NO ESTABLISHED INTERACTION HAZARDS";
+  }
+  el.appendChild(signal);
+
+  if (hazards.length === 0) {
+    const caveat = document.createElement("p");
+    caveat.className = "mono scan-line";
+    caveat.style.color = "var(--muted-paper)";
+    caveat.textContent = "This is not a finding of safety. See below.";
+    el.appendChild(caveat);
   }
 
   const line1 = document.createElement("p");
@@ -182,15 +207,28 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
   const line2 = document.createElement("p");
   line2.className = "mono scan-line";
   line2.textContent =
+    `${grounded} chemical${grounded === 1 ? "" : "s"} grounded · ` +
     `${limitations} PPE limitation${limitations === 1 ? "" : "s"} · ` +
     `${failedGrounding} chemical${failedGrounding === 1 ? "" : "s"} failed grounding · ` +
     `${noGhs} chemical${noGhs === 1 ? "" : "s"} with no GHS hazard classification`;
 
   const line2b = document.createElement("p");
   line2b.className = "mono scan-line";
-  line2b.textContent = `${gaps} pair${gaps === 1 ? "" : "s"} without interaction data`;
+  line2b.textContent = `${checkedGaps} pair${checkedGaps === 1 ? "" : "s"} checked against our reference set · none matched`;
 
-  el.append(signal, line1, line2, line2b);
+  el.append(line1, line2, line2b);
+
+  // Only shown when it applies — unlike the always-print-the-zero counts above, this
+  // is the rarer case (most grounded chemicals do carry reactive-group data), and the
+  // full distinction is never hidden regardless: it's always visible one section down
+  // as two separately-headed aggregate cards, never collapsed into one.
+  if (uncheckableGaps > 0) {
+    const line2c = document.createElement("p");
+    line2c.className = "mono scan-line";
+    line2c.textContent =
+      `${uncheckableGaps} pair${uncheckableGaps === 1 ? "" : "s"} could not be checked · reactive-group data unavailable`;
+    el.appendChild(line2c);
+  }
 
   const unresolved = extractionDetail.unresolved || 0;
   if (unresolved > 0) {
@@ -208,16 +246,16 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
 // ones) sitting between the two real findings. Aggregate them into one expandable
 // card instead of one-card-per-pair — still fully inspectable, no longer burying
 // the real hazards. The real hazards themselves are never touched by this.
-function renderGapAggregate(gaps) {
+function renderGapAggregate(gaps, heading) {
   const details = document.createElement("details");
   details.className = "card gap-card gap-aggregate rise-in";
 
   const summary = document.createElement("summary");
   summary.className = "gap-aggregate-summary";
-  const heading = document.createElement("span");
-  heading.className = "signal gap-heading";
-  heading.textContent = `${gaps.length} pair${gaps.length === 1 ? "" : "s"} checked · no established interaction data`;
-  summary.appendChild(heading);
+  const headingEl = document.createElement("span");
+  headingEl.className = "signal gap-heading";
+  headingEl.textContent = heading;
+  summary.appendChild(headingEl);
   details.appendChild(summary);
 
   for (const s of gaps) {
@@ -246,8 +284,25 @@ function renderInteractionSection(brief) {
     .sort((a, b) => (a.step_numbers[0] ?? 0) - (b.step_numbers[0] ?? 0));
   const gaps = brief.statements.filter((s) => s.kind === "interaction_no_data");
 
+  // 2026-07-11 pre-submission correctness check: "we checked this pair and nothing
+  // matched" and "we could not even determine a reactive group to check" are different
+  // epistemic states — the row text already says which, but a reader scanning just the
+  // aggregate heading needs the same distinction, not one umbrella "no established
+  // interaction data" covering both. Split by BriefStatement.gap_status.
+  const checked = gaps.filter((s) => s.gap_status === "no_established_data");
+  const uncheckable = gaps.filter((s) => s.gap_status === "insufficient_reactive_group_data");
+
   for (const s of hazards) section.appendChild(renderHazardCard(s));
-  if (gaps.length) section.appendChild(renderGapAggregate(gaps));
+  if (checked.length) {
+    section.appendChild(
+      renderGapAggregate(checked, `${checked.length} pair${checked.length === 1 ? "" : "s"} checked against our reference set · none matched`)
+    );
+  }
+  if (uncheckable.length) {
+    section.appendChild(
+      renderGapAggregate(uncheckable, `${uncheckable.length} pair${uncheckable.length === 1 ? "" : "s"} could not be checked · reactive-group data unavailable`)
+    );
+  }
 
   return section;
 }

@@ -258,6 +258,15 @@ class BriefStatement(BaseModel):
         description="Parallel to pictogram_urls (GHSInfo.pictograms) — plain-English label per pictogram, "
         "e.g. 'Corrosive', used as each SVG's alt text.",
     )
+    gap_status: Literal["no_established_data", "insufficient_reactive_group_data"] | None = Field(
+        default=None,
+        description="Set only for 'interaction_no_data': mirrors ChemicalPairFinding.status, so the UI can "
+        "group 'we checked this pair against our reference set and nothing matched' separately from 'we "
+        "could not even determine one or both chemicals' reactive groups to check' — two different epistemic "
+        "states that must never render identically (2026-07-11 pre-submission correctness check). Both "
+        "already produce differently-worded `text`; this exposes WHY as a structured field instead of "
+        "leaving the renderer to sniff the prose.",
+    )
 
 
 class BriefStep(BaseModel):

@@ -452,6 +452,57 @@ def test_interaction_no_data_is_surfaced():
     assert len(no_data) == 1
     assert no_data[0].text  # reused the finding's own note verbatim, not silence
     assert "not" in no_data[0].text.lower()
+    # Missing reactive-group data entirely -> "could not check", not "checked, no match".
+    assert no_data[0].gap_status == "insufficient_reactive_group_data"
+
+
+def test_gap_status_distinguishes_checked_from_uncheckable():
+    """2026-07-11 pre-submission correctness check: 'we checked this pair against our
+    reference set and nothing matched' and 'we could not even determine a reactive
+    group to check' are different epistemic states — the tool's whole thesis is making
+    exactly this kind of distinction, so BriefStatement.gap_status must carry it
+    structurally, not leave the UI to sniff which prose template rendered the text.
+    """
+    result = ExtractionResult(
+        chemicals=[
+            Chemical(id="c1", as_written="ethanol", canonical_name="ethanol", resolution_reasoning="x"),
+            Chemical(id="c2", as_written="water", canonical_name="water", resolution_reasoning="x"),
+            Chemical(id="c3", as_written="an uncatalogued reagent", canonical_name="uncatalogued reagent", resolution_reasoning="x"),
+        ],
+        steps=[
+            Step(
+                number=1,
+                text="Combine ethanol, water, and the uncatalogued reagent in one tube.",
+                chemicals_present=[
+                    StepChemicalRef(chemical_id="c1", origin="added"),
+                    StepChemicalRef(chemical_id="c2", origin="added"),
+                    StepChemicalRef(chemical_id="c3", origin="added"),
+                ],
+            )
+        ],
+    )
+    profiles = {
+        "ethanol": _full_profile("ethanol", 702, "Alcohols and Glycols"),
+        "water": _full_profile("water", 962, "Water and Aqueous Solutions"),
+        "uncatalogued reagent": _full_profile("uncatalogued reagent", 999999),  # no reactive group at all
+    }
+    findings = find_step_interactions(result, profiles)
+
+    brief = build_brief(result, profiles, findings)
+
+    gaps = [s for s in brief.statements if s.kind == "interaction_no_data"]
+    by_pair = {frozenset(s.pair): s for s in gaps}
+
+    checked = by_pair[frozenset(("c1", "c2"))]  # both have real, non-matching reactive groups
+    assert checked.gap_status == "no_established_data"
+    assert "no established interaction data" in checked.text.lower()
+
+    for pair in (frozenset(("c1", "c3")), frozenset(("c2", "c3"))):  # c3 has none at all
+        uncheckable = by_pair[pair]
+        assert uncheckable.gap_status == "insufficient_reactive_group_data"
+        assert "could not find authoritative reactive-group data" in uncheckable.text.lower()
+
+    assert checked.gap_status != by_pair[frozenset(("c1", "c3"))].gap_status
 
 
 def test_step_context_flagged_unverified():

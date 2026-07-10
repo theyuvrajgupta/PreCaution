@@ -374,6 +374,7 @@ def _interaction_statement(
         step_numbers=step_numbers,
         chemical_ids=chemical_ids,
         pair=pair,
+        gap_status=finding.status,
     )
 
 
