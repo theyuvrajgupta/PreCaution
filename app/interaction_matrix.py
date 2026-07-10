@@ -53,6 +53,24 @@ when every name in `example_chemicals` resolves to a chemical in the
 protocol being briefed — deterministic, no model call. See
 `tests/test_interaction_matrix.py::test_example_never_ships_without_its_required_chemicals`.
 
+**`example_chemicals` is a judgment call made when the entry is written, not
+something a rule can derive from the sentence.** Two failed candidate rules,
+both falsified by the entries already in this file: "quote the example if it
+names a chemical present in the protocol" wrongly passes RG44-RG2's chlorates
+sentence (it names H2SO4, which IS present — the sentence is still about a
+different oxidizer). "Require every chemical the example names to be
+present" wrongly drops RG8-RG2's azide sentence (it names HNO3, which is
+NOT present — the sentence is still genuinely about sodium azide + sulfuric
+acid). The real distinction — is this sentence about YOUR chemicals, or
+about a different member of the same reactive group with yours cast as the
+passive partner — is not decidable by string-matching the sentence against
+the protocol; it's decided by whoever reads the CAMEO page and writes the
+entry. `example_chemicals` records that decision; the render-time check only
+enforces it. Extending the matrix by feeding a new page to a model and
+trusting whatever it extracts would silently reintroduce this exact bug —
+which is why the roadmap's agentic matrix extender proposes entries for a
+human to review rather than committing them directly.
+
 Provenance: every quote below was fetched directly from CAMEO's own pairwise
 reactivity-documentation pages (not the generic single-group datasheets,
 which don't carry pair-specific predictions) on 2026-07-10 during the item-1
