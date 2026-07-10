@@ -150,3 +150,38 @@ def test_unrelated_known_groups_report_no_established_data_not_safe():
     assert findings[0].status == "no_established_data"
     assert findings[0].verdict is None
     assert "not" in findings[0].note.lower()  # explicitly says this isn't a safety claim
+
+
+def test_not_chemically_reactive_pair_states_classification_not_absence():
+    # UI_Design_Spec.md §21's "free grounding win": nitrogen's CAMEO reactive group is
+    # literally "Not Chemically Reactive" (confirmed live 2026-07-10) — that's a real
+    # assignment, not missing data, and the no-data note should say so.
+    result = ExtractionResult(
+        chemicals=[
+            Chemical(id="c1", as_written="water", canonical_name="water", resolution_reasoning="Direct match."),
+            Chemical(id="c2", as_written="nitrogen", canonical_name="nitrogen", resolution_reasoning="Direct match."),
+        ],
+        steps=[
+            Step(
+                number=3,
+                text="Rinse with deionized water and dry under a stream of nitrogen.",
+                chemicals_present=[
+                    StepChemicalRef(chemical_id="c1", origin="added"),
+                    StepChemicalRef(chemical_id="c2", origin="added"),
+                ],
+            )
+        ],
+    )
+    profiles = {
+        "water": _profile("water", 962, "Water and Aqueous Solutions"),
+        "nitrogen": _profile("nitrogen", 947, "Not Chemically Reactive"),
+    }
+    findings = find_step_interactions(result, profiles)
+
+    assert len(findings) == 1
+    finding = findings[0]
+    assert finding.status == "no_established_data"  # still not a matrix hazard verdict
+    assert "nitrogen is classified **Not Chemically Reactive**" in finding.note
+    assert "does not establish" in finding.note  # never concludes safety
+    assert finding.classification_source is not None
+    assert finding.classification_source.url == "https://cameochemicals.noaa.gov/chemical/x"
