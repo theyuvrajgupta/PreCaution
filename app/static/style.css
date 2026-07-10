@@ -1,24 +1,50 @@
-/* PreCaution — design tokens + layout (UI_Design_Spec.md §1-9).
+/* PreCaution — design tokens + layout (UI_Design_Spec.md §1-9, PART C §19-24).
    Anti-patterns (§3) are hard constraints, not style suggestions:
    no cream+serif+terracotta, no near-black+acid accent, no purple, no
    gradients, no rounded-2xl+shadow-lg, no emoji icons, no sparkles/AI
    badges/chat bubbles/typing indicators, no skeleton shimmer, no
    broadsheet/hairline-rules/newspaper-columns, no green anywhere, no
    hero section. This tool never says "safe" — the palette has no
-   success colour (§4). */
+   success colour (§4).
+
+   §4.1, the rule that governs every token below: every text token is bound
+   to the surface it is legal on. --muted-paper must NEVER appear on
+   --bench, and no --*-bench token may appear on a light surface. v1 defined
+   one --muted #67706F for both surfaces; on --bench that was ~3.6:1 and
+   failed WCAG AA — that bug is why this file is split the way it is. */
 
 :root {
-  /* §4 colour tokens — exact hex, do not adjust for "polish" */
+  /* Dark surfaces (§4.3) */
   --bench: #14171a;
-  --paper: #f7f7f4; /* cool bone — NOT warm cream */
-  --paper-sunk: #edeeea;
+  --bench-raised: #1d2124;
+  /* §4.1's own 3:1 non-text floor, checked against the spec's literal swatch: it
+     fails (~1.55:1) — the same class of spec bug §4.1 itself calls out for v1's
+     --muted. Darkened to the nearest value that actually clears 3:1. */
+  --line-bench: #5e6567;
+
+  /* Light surfaces (§4.2) — three, not one flat pane */
+  --field: #e2e6e3; /* the pane BEHIND the brief */
+  --sheet: #fafaf8; /* the brief itself, a bounded document on the field */
+  --sheet-sunk: #edefeb; /* card fills inside the sheet */
+  /* Same fix as --line-bench: the spec's literal #C9CFCB is ~1.51:1 on --sheet,
+     failing the 3:1 non-text floor §4.1 itself declares non-negotiable. */
+  --line: #8e928d;
+
+  /* Text, paired to surface (§4.4) */
   --ink: #14171a;
-  --ink-bench: #e8eae6;
-  --muted: #67706f;
+  --ink-bench: #edefec;
+  --muted-paper: #5c6664;
+  --muted-bench: #96a09d;
+
+  /* Semantic colour, also surface-paired (§4.5) — no success colour, ever */
   --danger: #ce0e2d;
-  --caution: #b4791a;
-  --gap: #67706f; /* same as --muted, deliberately: never red, never green */
-  --source: #1b4d6b;
+  --danger-bench: #ff4d63;
+  --caution: #8a5a00;
+  --caution-bench: #e0a44a;
+  --source: #144e6b;
+  --source-bench: #7fb4d4;
+  --gap: var(--muted-paper); /* gaps render in slate, never red, never green */
+  --gap-bench: var(--muted-bench);
 
   /* §5 type */
   --font-signal: "Archivo", Arial, sans-serif;
@@ -54,7 +80,10 @@ body {
   font-size: var(--size-body);
   line-height: 1.55;
   color: var(--ink);
-  background: var(--paper);
+  background: var(--field);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 textarea,
@@ -88,7 +117,7 @@ button:disabled {
   font-size: var(--size-eyebrow);
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  color: var(--muted);
+  color: var(--muted-paper);
   margin: 0 0 0.75em;
 }
 
@@ -119,7 +148,7 @@ button:disabled {
 .pane {
   flex: 1 1 50%;
   min-width: 0;
-  padding: 2rem 2rem 2rem calc(2rem + var(--gutter-width));
+  padding: 2rem;
   position: relative;
 }
 
@@ -129,28 +158,61 @@ button:disabled {
 }
 
 .pane-bench .eyebrow {
-  color: var(--muted);
+  color: var(--muted-bench);
 }
 
 .pane-paper {
-  background: var(--paper);
+  background: var(--field);
   color: var(--ink);
-  padding-left: 2rem; /* the gutter belongs to the bench pane, not paper */
+  display: flex;
+  justify-content: center;
 }
 
-/* The 44px gutter for the carryover thread (§6.1, §2.3). Children are
-   positioned absolutely in JS (thread.js), keyed to the rendered step rows'
-   actual layout — text-driven row heights aren't known until layout runs. */
-.bench-gutter {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: var(--gutter-width);
-  height: 100%;
+/* §4.2: the brief is a bounded sheet on the field, max-width ~72ch, with real
+   margins — not a flat white pane touching the edges of the viewport. */
+.sheet {
+  width: 100%;
+  max-width: 72ch;
+  background: var(--sheet);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 2rem;
 }
+
+/* --- Bench pane: gutter + step rows, sticky together (§19.4) ------------- */
 
 .bench-content {
   max-width: 640px;
+}
+
+/* §19.4: sticky so the gutter+steps hold in view as the (usually much taller)
+   paper pane scrolls, instead of leaving a black void once the shorter bench
+   content scrolls out of frame — "the most visible flaw in the build."
+   gutterEl and stepsEl are flex siblings here, not an absolute overlay, so
+   they move in exact lockstep whether pinned or in normal flow — see
+   thread.js's comment on why that keeps the gutter-mark math correct. */
+.bench-sticky {
+  position: sticky;
+  top: 2rem;
+  display: flex;
+  align-items: stretch;
+  max-width: calc(640px + var(--gutter-width));
+}
+
+.bench-gutter {
+  position: relative;
+  flex: none;
+  width: var(--gutter-width);
+}
+
+.bench-steps {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bench-steps-note {
+  color: var(--muted-bench);
+  margin: 0 0 1rem;
 }
 
 /* --- Carryover thread: gutter marks (§6.1) -------------------------------- */
@@ -163,6 +225,8 @@ button:disabled {
   opacity: 0.3;
 }
 
+/* --danger, not --danger-bench: the thread is a graphic (3:1 floor), not text
+   — spec §4.5 explicitly carves this out. */
 .gutter-line-hot {
   left: 19px; /* keep centred as the bar widens 2px -> 3px */
   width: 3px;
@@ -189,7 +253,7 @@ button:disabled {
 
 .gutter-token-label {
   font-size: 9px;
-  color: var(--muted);
+  color: var(--muted-bench);
   white-space: nowrap;
 }
 
@@ -204,18 +268,16 @@ button:disabled {
 
 /* --- Rendered step rows (bench pane, Read/Incomplete states) -------------- */
 
-.bench-steps {
-  max-width: 640px;
-}
-
 .bench-step {
-  padding: 0.6em 0;
+  background: var(--bench-raised);
+  border-radius: 2px;
+  padding: 0.6em 0.75em;
   margin-bottom: 0.4rem;
   min-height: 48px;
 }
 
 .bench-step-number {
-  color: var(--muted);
+  color: var(--muted-bench);
   margin-right: 0.3em;
 }
 
@@ -225,26 +287,28 @@ button:disabled {
 }
 
 .bench-step-text:focus-visible {
-  outline: 2px solid var(--source);
+  outline: 2px solid var(--source-bench);
   outline-offset: 2px;
 }
 
 .bench-step-vessel {
-  color: var(--muted);
+  color: var(--muted-bench);
   margin: 0.3em 0 0;
 }
 
-/* --- Unverified marker (§6.1a) — trust seam, never styled as an error ----- */
+/* --- Unverified marker (§6.1a, narrowed by §22) — trust seam, never styled
+   as an error. Only the load-bearing claim's row carries this now; every
+   other row gets the quiet section-level note instead (.bench-steps-note). */
 
 .unverified {
-  text-decoration: underline dotted var(--muted);
+  text-decoration: underline dotted var(--muted-bench);
   text-underline-offset: 3px;
   cursor: default;
 }
 
 .unverified-marker {
   font-size: 9px;
-  color: var(--muted);
+  color: var(--muted-bench);
   margin-left: 0.4em;
   vertical-align: super;
 }
@@ -253,9 +317,9 @@ button:disabled {
   display: block;
   font-family: var(--font-mono);
   font-size: var(--size-mono);
-  color: var(--muted);
-  background: var(--paper-sunk);
-  border: 1px solid var(--muted);
+  color: var(--ink);
+  background: var(--sheet-sunk);
+  border: 1px solid var(--line);
   border-radius: 2px;
   padding: 0.5em 0.7em;
   margin-top: 0.3em;
@@ -274,7 +338,7 @@ button:disabled {
   min-height: 320px;
   resize: vertical;
   background: transparent;
-  border: 1px solid var(--muted);
+  border: 1px solid var(--line-bench);
   border-radius: 2px;
   color: var(--ink-bench);
   padding: 1rem;
@@ -283,12 +347,16 @@ button:disabled {
   line-height: 1.55;
 }
 
+.protocol-input[hidden] {
+  display: none;
+}
+
 .protocol-input::placeholder {
-  color: var(--muted);
+  color: var(--muted-bench);
 }
 
 .protocol-input:focus-visible {
-  outline: 2px solid var(--source);
+  outline: 2px solid var(--source-bench);
   outline-offset: 2px;
 }
 
@@ -303,6 +371,10 @@ button:disabled {
   display: flex;
   gap: 0.75rem;
   margin-top: 1rem;
+}
+
+.bench-controls[hidden] {
+  display: none;
 }
 
 .btn {
@@ -322,19 +394,43 @@ button:disabled {
 
 .btn-primary:disabled {
   background: transparent;
-  color: var(--muted);
-  border-color: var(--muted);
+  color: var(--muted-bench);
+  border-color: var(--muted-bench);
 }
 
 .btn-quiet {
   background: transparent;
   color: var(--ink-bench);
-  border-color: var(--muted);
+  border-color: var(--line-bench);
+}
+
+/* .btn/.btn-primary/.btn-quiet were designed for the bench pane's own two
+   buttons; every button that instead lives on the paper/sheet side (light
+   surface) — retry buttons in the failed panel, incomplete banner, and
+   frozen stage log, plus the print button — reusing the bench-tuned tokens
+   there put near-invisible light text on a light sheet. Scoped to .sheet,
+   not .paper-panel: the print button is a sheet child but not itself a
+   .paper-panel, and was still broken until this was widened to catch it.
+   Same §4.1 "tokens never cross surfaces" rule, just found on a component
+   this pass touches rather than a text style. */
+.sheet .btn-quiet {
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.sheet .btn-primary {
+  background: var(--ink);
+  color: var(--sheet);
+  border-color: var(--ink);
 }
 
 .btn:focus-visible {
   outline: 2px solid var(--source);
   outline-offset: 2px;
+}
+
+.pane-bench .btn:focus-visible {
+  outline-color: var(--source-bench);
 }
 
 /* --- Paper pane: shared panel rules -------------------------------------- */
@@ -345,8 +441,32 @@ button:disabled {
 
 .paper-empty .empty-copy {
   font-size: var(--size-body);
-  color: var(--muted);
+  color: var(--muted-paper);
   max-width: 40ch;
+}
+
+/* §23: the empty paper pane was 90% dead space — the scope boundary (what
+   PreCaution does / explicitly does not do) belongs here, on-brand, so a
+   judge landing cold understands the tool before pressing anything. */
+.scope-boundary {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+  max-width: 56ch;
+}
+
+.scope-line {
+  color: var(--muted-paper);
+  margin: 0 0 0.75em;
+}
+
+.scope-label {
+  font-family: var(--font-signal);
+  font-weight: 700;
+  color: var(--ink);
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.06em;
 }
 
 /* --- Stage log (§14) ------------------------------------------------------ */
@@ -367,7 +487,7 @@ button:disabled {
 }
 
 .stage-log-subline {
-  color: var(--muted);
+  color: var(--muted-paper);
   margin-left: 1em;
 }
 
@@ -386,11 +506,11 @@ button:disabled {
 .receipt {
   font-family: var(--font-mono);
   font-size: var(--size-mono);
-  color: var(--muted);
+  color: var(--muted-paper);
   margin-bottom: 1.5rem;
 }
 
-/* --- Scan layer (§15 item 1) ---------------------------------------------- */
+/* --- Scan layer (§15 item 1, §23: the loudest thing on the page) ---------- */
 
 .scan-layer {
   margin-bottom: 2rem;
@@ -398,12 +518,14 @@ button:disabled {
 
 .scan-layer .signal {
   display: block;
-  margin-bottom: 0.4em;
+  font-size: 20px;
+  margin-bottom: 0.5em;
 }
 
 .scan-line {
-  color: var(--muted);
+  color: var(--muted-paper);
   margin: 0 0 0.2em;
+  max-width: 72ch;
 }
 
 /* --- Cards: hazard (§6.4) / gap (§6.5) / glove notice (§6.6) -------------- */
@@ -411,13 +533,14 @@ button:disabled {
 .card {
   position: relative;
   border-radius: 2px;
-  border: 1px solid var(--paper-sunk);
+  border: 1px solid var(--line);
   padding: 1em 1em 1em 1.25em;
   margin: 0 0 1rem;
 }
 
 .card-body {
   margin: 0 0 0.6em;
+  max-width: 72ch;
 }
 
 .hazard-card {
@@ -431,8 +554,30 @@ button:disabled {
 }
 
 .hazard-card .card-steps {
-  color: var(--muted);
+  color: var(--muted-paper);
   margin: 0 0 0.5em;
+}
+
+/* Authored framing line — which chemicals, combined directly or one carried over.
+   Deliberately styled as normal body text, NOT muted: this is a real, load-bearing
+   claim (§3.3), just not a CAMEO quote, so it must read as confidently as the quote
+   itself — only its lack of a chip marks it as authored rather than sourced. */
+.hazard-card .card-lead-in {
+  font-weight: 600;
+  margin: 0 0 0.5em;
+  max-width: 72ch;
+}
+
+.hazard-card .card-quote {
+  font-style: italic;
+}
+
+/* Authored nominal note (e.g. a common name) — quieter than the quote, and visibly
+   separate from the chipped block above it. Never a hazard claim (tests enforce this). */
+.hazard-card .card-note {
+  color: var(--muted-paper);
+  margin: 0.6em 0 0;
+  max-width: 72ch;
 }
 
 /* Gap cards get a diagonal hazard-tape hatch on the left edge instead of a
@@ -464,7 +609,29 @@ button:disabled {
   margin-bottom: 0.3em;
 }
 
-/* --- Provenance chip (§6.2) ------------------------------------------------ */
+/* §21: aggregate card — one collapsed row for "N pairs checked", not one gap
+   card per pair. Still fully inspectable (expands to the full list), still
+   counted in the scan layer. Same visual weight as a hazard card. */
+.gap-aggregate-summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.gap-aggregate-summary::-webkit-details-marker {
+  display: none;
+}
+
+.gap-aggregate-row {
+  padding-top: 0.6em;
+  margin-top: 0.6em;
+  border-top: 1px solid var(--line);
+}
+
+.gap-aggregate-row:first-of-type {
+  margin-top: 0.8em;
+}
+
+/* --- Provenance chip (§6.2) — paper/sheet only, chips never appear on bench */
 
 .chip {
   display: inline-block;
@@ -480,7 +647,7 @@ button:disabled {
 a.chip:hover,
 a.chip:focus-visible {
   background: var(--source);
-  color: var(--paper);
+  color: var(--sheet);
 }
 
 .chip:focus-visible {
@@ -491,16 +658,128 @@ a.chip:focus-visible {
 /* --- Interaction hazards + per-chemical controls sections (§15 items 2-3) - */
 
 .interaction-section,
+.unresolved-section,
 .chemicals-section {
   margin-bottom: 2rem;
 }
 
+/* §20: one collapsed row per chemical, expanded into source-labelled groups —
+   this is the fix for the per-chemical wall. Never truncated, only folded. */
+
 .chemical-block {
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 0 1em;
+}
+
+.chemical-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.75em 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+/* §6.3: real GHS SVGs, exactly as PubChem returns them — no recolour, no shadow. */
+.ghs-pictogram {
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+
+.chemical-summary::-webkit-details-marker {
+  display: none;
+}
+
+/* §F: <summary> is natively keyboard-focusable (Tab reaches it, Enter/Space
+   toggles it) — needs the same visible ring as every other interactive
+   element, not just the elements that happen to be <button>/<a>. */
+.chemical-summary:focus-visible,
+.source-group-summary:focus-visible,
+.gap-aggregate-summary:focus-visible {
+  outline: 2px solid var(--source);
+  outline-offset: 2px;
+}
+
+.chemical-summary::before {
+  content: "▸";
+  color: var(--muted-paper);
+  transition: transform 0.1s ease;
+}
+
+.chemical-block[open] > .chemical-summary::before {
+  transform: rotate(90deg);
+}
+
+.chemical-body {
+  padding-bottom: 0.75em;
+}
+
+/* Grounded gradation (§4.6): PubChem's own GHS signal word per chemical,
+   Danger -> --danger, Warning -> --caution. Free depth, not invented — and
+   the word itself is always present too (§4.7: never colour alone). */
+.signal-badge {
+  padding: 0.1em 0.5em;
+  border-radius: 2px;
+  font-size: 11px;
+}
+
+.signal-badge-danger {
+  color: var(--sheet);
+  background: var(--danger);
+}
+
+.signal-badge-warning {
+  color: var(--sheet);
+  background: var(--caution);
+}
+
+.source-group {
+  margin: 0 0 0.75em;
+  border-left: 2px solid var(--line);
+  padding-left: 0.75em;
+}
+
+.source-group-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+  cursor: pointer;
+  padding: 0.3em 0;
+  list-style: none;
+}
+
+.source-group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.source-group-summary::before {
+  content: "▸";
+  color: var(--muted-paper);
+  font-size: 11px;
+}
+
+.source-group[open] > .source-group-summary::before {
+  content: "▾";
+}
+
+.source-group-title {
+  font-family: var(--font-signal);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.source-group-subtitle {
+  color: var(--muted-paper);
+  font-size: 11px;
 }
 
 .control-line {
   margin: 0 0 0.5em;
+  max-width: 72ch;
 }
 
 .control-line .chip {
@@ -513,7 +792,7 @@ a.chip:focus-visible {
   border-left: 3px solid var(--danger);
   padding: 0.75em 1em;
   margin-bottom: 1.5rem;
-  background: var(--paper-sunk);
+  background: var(--sheet-sunk);
 }
 
 .incomplete-banner .signal {
@@ -532,14 +811,20 @@ a.chip:focus-visible {
   margin-top: 0.5rem;
 }
 
+/* --- Print (§17 — the brief has to leave the screen) ---------------------- */
+
+.print-btn {
+  margin-top: 1.5rem;
+}
+
 /* --- Footer (§9 — always present, one line) ------------------------------ */
 
 .app-footer {
   font-size: var(--size-eyebrow);
-  color: var(--muted);
+  color: var(--muted-paper);
   text-align: center;
   padding: 1rem 2rem;
-  border-top: 1px solid var(--paper-sunk);
+  border-top: 1px solid var(--line);
 }
 
 /* --- Motion (§8) — one restrained moment, nothing else ------------------- */
@@ -562,5 +847,162 @@ a.chip:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .rise-in {
     animation: none;
+  }
+
+  .chemical-summary::before {
+    transition: none;
+  }
+}
+
+/* --- Print (§17): "a bench needs paper" -----------------------------------
+   Groups are force-opened and chips relabelled as numbered references by
+   app.js's beforeprint/afterprint handlers (prepareForPrint/restoreAfterPrint)
+   — this stylesheet handles everything that's pure presentation. */
+
+@media print {
+  body {
+    background: white;
+  }
+
+  .app {
+    display: block; /* stack — the two-pane split is a screen-only layout */
+  }
+
+  .print-btn {
+    display: none;
+  }
+
+  /* Bench pane -> plain numbered protocol steps, no dark fill (§17). */
+  .pane-bench {
+    background: white;
+    color: black;
+    padding: 0 0 1rem;
+  }
+
+  .pane-bench .eyebrow {
+    color: #444;
+  }
+
+  .bench-content {
+    display: none; /* raw textarea/buttons never apply once there's a brief to print */
+  }
+
+  .bench-sticky {
+    position: static;
+    max-width: none;
+  }
+
+  .bench-gutter {
+    display: none; /* the thread is a screen-only graphic; everything it encodes is already text (§18) */
+  }
+
+  .bench-step {
+    background: none;
+    border-bottom: 1px solid #ccc;
+    border-radius: 0;
+    break-inside: avoid;
+  }
+
+  .bench-step-number,
+  .bench-step-vessel,
+  .bench-steps-note {
+    color: #444;
+  }
+
+  .bench-step-text {
+    color: black;
+  }
+
+  .unverified-tip {
+    display: none; /* the hover/focus tooltip has no meaning on paper */
+  }
+
+  /* §6.1a/§17: "[unverified]" survives the journey even though the tooltip can't. */
+  .unverified-marker {
+    font-size: 0;
+  }
+
+  .unverified-marker::after {
+    content: "[unverified]";
+    font-size: var(--size-mono);
+  }
+
+  /* Paper pane: the brief prints in full, in the §15 order — full width, no
+     field/sheet distinction needed once it's already on actual paper. */
+  .pane-paper {
+    background: white;
+    display: block;
+    padding: 0;
+  }
+
+  .sheet {
+    max-width: none;
+    border: none;
+    padding: 0;
+    background: white;
+  }
+
+  .paper-empty {
+    display: none; /* nothing to print before a brief exists */
+  }
+
+  /* §20/§17: print expands everything — groups are force-opened by
+     prepareForPrint; the ▸/▾ disclosure triangle is a screen-only affordance. */
+  .chemical-summary::before,
+  .source-group-summary::before,
+  .gap-aggregate-summary::before {
+    display: none;
+  }
+
+  .chemical-summary,
+  .source-group-summary,
+  .gap-aggregate-summary {
+    cursor: default;
+  }
+
+  .card,
+  .chemical-block,
+  .source-group {
+    break-inside: avoid;
+  }
+
+  /* Chips print as numbered references, not boxed links — prepareForPrint
+     relabels them "[n]" and appends #print-footnotes (§6.2/§17). */
+  .chip {
+    border: none;
+    padding: 0;
+    color: black;
+    text-decoration: none;
+  }
+
+  #print-footnotes {
+    margin-top: 2rem;
+    border-top: 1px solid black;
+    padding-top: 0.5rem;
+  }
+
+  #print-footnotes p {
+    margin: 0 0 0.3em;
+    color: black;
+  }
+
+  .rise-in {
+    animation: none;
+  }
+
+  /* §9: the footer prints on every page — position:fixed repeats per printed
+     page in Chromium's pagination. */
+  .app-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    color: black;
+    border-top: 1px solid black;
+  }
+
+  body {
+    padding-bottom: 3rem; /* leave room for the fixed footer on every page */
   }
 }

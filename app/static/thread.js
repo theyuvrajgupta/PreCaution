@@ -19,36 +19,78 @@ function clearChildren(el) {
   while (el.firstChild) el.removeChild(el.firstChild);
 }
 
-function buildStepRow(step) {
+// §22: every step row is a step_context statement (always unverified=true), but
+// marking all of them made the marker wallpaper — when everything is flagged,
+// nothing is. Reserve the visible dotted-underline + ᴜɴᴠ marker for the one
+// claim that's genuinely load-bearing: a step where a NEW hazard forms because
+// something carried over from an earlier step (not freshly added there) — e.g.
+// "the spent piranha is still in the carboy." That specific attribution is
+// exactly what rests on Claude's read of the protocol, not a lookup (§3.3).
+// Every other row gets a quiet section-level note instead (see buildStepRow).
+function computeLoadBearingSteps(steps, onsetAt) {
+  const byNumber = new Map(steps.map((s) => [s.number, s]));
+  const loadBearing = new Set();
+  for (const [stepNum, hazardsHere] of onsetAt) {
+    const step = byNumber.get(stepNum);
+    if (!step) continue;
+    for (const s of hazardsHere) {
+      const involved = new Set(s.chemical_ids);
+      if (step.chemicals.some((c) => involved.has(c.chemical_id) && c.origin !== "added")) {
+        loadBearing.add(stepNum);
+      }
+    }
+  }
+  return loadBearing;
+}
+
+function buildStepRow(step, isLoadBearing) {
   const row = document.createElement("div");
   row.className = "bench-step rise-in";
   row.dataset.step = String(step.number);
 
   const text = document.createElement("p");
-  text.className = "bench-step-text unverified";
+  text.className = "bench-step-text" + (isLoadBearing ? " unverified" : "");
   text.tabIndex = 0;
 
   const num = document.createElement("span");
   num.className = "mono bench-step-number";
   num.textContent = `${step.number}.`;
 
-  const tipId = `unv-tip-${step.number}`;
-  const marker = document.createElement("span");
-  marker.className = "mono unverified-marker";
-  marker.textContent = "ᴜɴᴠ";
-  marker.setAttribute("aria-hidden", "true");
+  text.append(num, ` ${step.text} `);
 
-  text.append(num, ` ${step.text} `, marker);
-  text.setAttribute("aria-describedby", tipId);
+  if (isLoadBearing) {
+    const tipId = `unv-tip-${step.number}`;
+    const marker = document.createElement("span");
+    marker.className = "mono unverified-marker";
+    marker.textContent = "ᴜɴᴠ";
+    marker.setAttribute("aria-hidden", "true");
+    text.appendChild(marker);
+    text.setAttribute("aria-describedby", tipId);
 
-  const tip = document.createElement("span");
-  tip.id = tipId;
-  tip.className = "unverified-tip";
-  tip.setAttribute("role", "tooltip");
-  tip.hidden = true;
-  tip.textContent = UNVERIFIED_TIP;
+    const tip = document.createElement("span");
+    tip.id = tipId;
+    tip.className = "unverified-tip";
+    tip.setAttribute("role", "tooltip");
+    tip.hidden = true;
+    tip.textContent = UNVERIFIED_TIP;
+    row.append(text, tip);
 
-  row.append(text, tip);
+    const show = () => {
+      tip.hidden = false;
+    };
+    const hide = () => {
+      tip.hidden = true;
+    };
+    text.addEventListener("mouseenter", show);
+    text.addEventListener("mouseleave", hide);
+    text.addEventListener("focus", show);
+    text.addEventListener("blur", hide);
+    text.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") hide();
+    });
+  } else {
+    row.appendChild(text);
+  }
 
   if (step.vessel) {
     const vessel = document.createElement("p");
@@ -56,20 +98,6 @@ function buildStepRow(step) {
     vessel.textContent = `⌐ vessel: ${step.vessel}`;
     row.appendChild(vessel);
   }
-
-  const show = () => {
-    tip.hidden = false;
-  };
-  const hide = () => {
-    tip.hidden = true;
-  };
-  text.addEventListener("mouseenter", show);
-  text.addEventListener("mouseleave", hide);
-  text.addEventListener("focus", show);
-  text.addEventListener("blur", hide);
-  text.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") hide();
-  });
 
   return row;
 }
@@ -88,12 +116,14 @@ function pruneUnchangedVesselTicks(stepsEl, steps) {
   }
 }
 
-function drawGutter(paneEl, gutterEl, stepsEl, steps, statements) {
-  clearChildren(gutterEl);
+// onset: stepNumber -> [statement, ...] (where a pair NEWLY returns hazard_found).
+// hotSegments: "n-n+1" pairs of adjacent steps the hazard persists across.
+// Shared by buildStepRow's load-bearing check and drawGutter's diamonds/hot line —
+// computed once per render, not duplicated.
+function computeOnsetAndHotSegments(statements) {
   const hazards = statements.filter((s) => s.kind === "interaction_hazard" && s.step_numbers.length);
-
-  const onsetAt = new Map(); // stepNumber -> [statement, ...]
-  const hotSegments = new Set(); // "n-n+1"
+  const onsetAt = new Map();
+  const hotSegments = new Set();
   for (const s of hazards) {
     const nums = [...s.step_numbers].sort((a, b) => a - b);
     const onset = nums[0];
@@ -103,8 +133,18 @@ function drawGutter(paneEl, gutterEl, stepsEl, steps, statements) {
       if (nums[i + 1] === nums[i] + 1) hotSegments.add(`${nums[i]}-${nums[i + 1]}`);
     }
   }
+  return { onsetAt, hotSegments };
+}
 
-  const paneTop = paneEl.getBoundingClientRect().top;
+function drawGutter(gutterEl, stepsEl, steps, onsetAt, hotSegments) {
+  clearChildren(gutterEl);
+
+  // Marks are positioned absolute relative to gutterEl itself (its own top edge,
+  // not the pane's) — gutterEl and stepsEl are now flex siblings inside the same
+  // sticky wrapper (#bench-sticky, §19.4), so this offset stays correct whether
+  // the wrapper is in normal flow or currently pinned: both move by the same
+  // viewport delta together, so the difference between their rects never changes.
+  const paneTop = gutterEl.getBoundingClientRect().top;
   const centerByStep = new Map();
   for (const row of stepsEl.querySelectorAll(".bench-step")) {
     const rect = row.getBoundingClientRect();
@@ -177,14 +217,24 @@ function drawGutter(paneEl, gutterEl, stepsEl, steps, statements) {
 // Decorative in the accessibility tree — everything the thread encodes (which
 // chemical entered where, which pair became hazardous, how long it persisted)
 // is also stated in text elsewhere in the brief. Never encode meaning only here.
-export function renderThread(paneEl, gutterEl, stepsEl, { steps, statements }) {
+export function renderThread(gutterEl, stepsEl, { steps, statements }) {
   clearChildren(stepsEl);
   clearChildren(gutterEl);
   if (!steps || !steps.length) return;
 
+  const { onsetAt, hotSegments } = computeOnsetAndHotSegments(statements);
+  const loadBearingSteps = computeLoadBearingSteps(steps, onsetAt);
+
+  // §22: one quiet section-level note instead of marking every row — the
+  // per-row marker is reserved for the load-bearing claim(s) only.
+  const note = document.createElement("p");
+  note.className = "mono bench-steps-note";
+  note.textContent = "Step attribution is Claude's read of the protocol text, not a lookup.";
+  stepsEl.appendChild(note);
+
   for (const step of steps) {
-    stepsEl.appendChild(buildStepRow(step));
+    stepsEl.appendChild(buildStepRow(step, loadBearingSteps.has(step.number)));
   }
   pruneUnchangedVesselTicks(stepsEl, steps);
-  drawGutter(paneEl, gutterEl, stepsEl, steps, statements);
+  drawGutter(gutterEl, stepsEl, steps, onsetAt, hotSegments);
 }

@@ -26,10 +26,10 @@ const appEl = document.getElementById("app");
 const protocolInput = document.getElementById("protocol-input");
 const demoBtn = document.getElementById("demo-btn");
 const readBtn = document.getElementById("read-btn");
-const benchPaneEl = document.querySelector(".pane-bench");
 const benchControlsEl = document.getElementById("bench-controls");
 const benchGutterEl = document.getElementById("bench-gutter");
 const benchStepsEl = document.getElementById("bench-steps");
+const printBtn = document.getElementById("print-btn");
 
 const panels = {
   empty: document.getElementById("paper-empty"),
@@ -47,6 +47,9 @@ const state = {
   extractionDetail: null, // {chemicals, steps, mixtures, unresolved} counts from the stream
   chemicalRecords: [], // [{name, cid, found, missing_sections, chemical_ids}, ...]
   lastError: null,
+  // 'error' (extraction/network failure) | 'no_chemicals' (§16.2: not an error,
+  // an explanation) — which flavor of the 'failed' state to render.
+  failureKind: "error",
 };
 
 function setState(next) {
@@ -78,6 +81,9 @@ function showBenchThread(showThread) {
 }
 
 function render() {
+  // §17: only meaningful once there's a brief on the page.
+  printBtn.hidden = state.current !== "read" && state.current !== "incomplete";
+
   switch (state.current) {
     case "empty":
       protocolInput.readOnly = false;
@@ -94,7 +100,7 @@ function render() {
     case "read":
       protocolInput.readOnly = true;
       showBenchThread(true);
-      renderThread(benchPaneEl, benchGutterEl, benchStepsEl, { steps: state.brief.steps, statements: state.brief.statements });
+      renderThread(benchGutterEl, benchStepsEl, { steps: state.brief.steps, statements: state.brief.statements });
       renderReceipt();
       renderBrief(panels.briefOutput, {
         brief: state.brief,
@@ -107,7 +113,7 @@ function render() {
     case "incomplete":
       protocolInput.readOnly = true;
       showBenchThread(true);
-      renderThread(benchPaneEl, benchGutterEl, benchStepsEl, { steps: state.brief.steps, statements: state.brief.statements });
+      renderThread(benchGutterEl, benchStepsEl, { steps: state.brief.steps, statements: state.brief.statements });
       renderReceipt();
       renderIncompleteBanner();
       renderBrief(panels.briefOutput, {
@@ -135,7 +141,7 @@ window.addEventListener("resize", () => {
   if (state.current !== "read" && state.current !== "incomplete") return;
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    renderThread(benchPaneEl, benchGutterEl, benchStepsEl, { steps: state.brief.steps, statements: state.brief.statements });
+    renderThread(benchGutterEl, benchStepsEl, { steps: state.brief.steps, statements: state.brief.statements });
   }, 150);
 });
 
@@ -175,21 +181,19 @@ function renderIncompleteBanner() {
   panels.incompleteBanner.append(heading, body, caveat, retryBtn);
 }
 
-// Covers UI_Design_Spec.md §16.2's "Extraction call fails (502)" case, plus
-// any stream-level failure (network dies mid-stream, malformed response) —
-// both currently land here as one unified explanation. §16.2's more specific
-// "log freezes in place, not the full panel" treatment for the mid-stream
-// case is a refinement for the next pass (§2.7/§2.8).
+// Covers UI_Design_Spec.md §16.2's "Extraction call fails (502)" case (and any
+// failure before the stream produced a single real event — see §D's freeze-
+// in-place handling in startReading for the mid-stream case, which does NOT
+// route through here) plus "No chemicals identified" — not an error, an
+// explanation, so it gets its own copy and an offer to load the demo instead
+// of the danger-coloured "could not read" heading.
 function renderFailedPanel() {
   clearChildren(panels.failedPanel);
   const heading = document.createElement("p");
   heading.className = "signal";
-  heading.style.color = "var(--danger)";
-  heading.textContent = "Could not read the protocol.";
 
   const detail = document.createElement("p");
   detail.className = "mono";
-  detail.textContent = state.lastError || "";
 
   const retryBtn = document.createElement("button");
   retryBtn.type = "button";
@@ -197,7 +201,28 @@ function renderFailedPanel() {
   retryBtn.textContent = "Retry";
   retryBtn.addEventListener("click", startReading);
 
-  panels.failedPanel.append(heading, detail, retryBtn);
+  if (state.failureKind === "no_chemicals") {
+    heading.textContent = "No chemicals identified.";
+    detail.textContent = "PreCaution reads chemical protocols; this doesn't look like one.";
+
+    const demoOfferBtn = document.createElement("button");
+    demoOfferBtn.type = "button";
+    demoOfferBtn.className = "btn btn-quiet";
+    demoOfferBtn.textContent = "Load the demo protocol";
+    demoOfferBtn.addEventListener("click", () => {
+      protocolInput.value = DEMO_PROTOCOL;
+      setState("empty");
+      updateReadButtonEnabled();
+      protocolInput.focus();
+    });
+
+    panels.failedPanel.append(heading, detail, demoOfferBtn, retryBtn);
+  } else {
+    heading.style.color = "var(--danger)";
+    heading.textContent = "Could not read the protocol.";
+    detail.textContent = state.lastError || "";
+    panels.failedPanel.append(heading, detail, retryBtn);
+  }
 }
 
 function updateReadButtonEnabled() {
@@ -257,6 +282,24 @@ function appendLogSubline(block, text, extraClass) {
   block.appendChild(p);
 }
 
+// §16.2 "Network dies mid-stream": freeze the log in place — turn the last
+// real event's line to the error colour and offer Retry — rather than
+// swapping to the full failed panel and hiding what already happened. Only
+// called when the stream had genuinely produced at least one real event;
+// see startReading's streamStarted check.
+function freezeStageLogWithError() {
+  const lines = panels.stageLog.querySelectorAll(".stage-log-line");
+  if (lines.length) lines[lines.length - 1].classList.add("is-error");
+
+  const retryBtn = document.createElement("button");
+  retryBtn.type = "button";
+  retryBtn.className = "btn btn-quiet";
+  retryBtn.textContent = "Retry";
+  retryBtn.style.marginTop = "0.75rem";
+  retryBtn.addEventListener("click", startReading);
+  panels.stageLog.appendChild(retryBtn);
+}
+
 async function startReading() {
   const text = protocolInput.value;
   state.protocolText = text;
@@ -269,6 +312,7 @@ async function startReading() {
   let extractionBlock = null;
   let finalBrief = null;
   let sawUnrecoverableError = false;
+  let streamStarted = false; // did at least one real SSE event arrive? gates freeze-in-place vs the full failed panel
 
   try {
     const res = await fetch("/brief/stream", {
@@ -282,6 +326,7 @@ async function startReading() {
     }
 
     for await (const { event, data } of parseSSEStream(res)) {
+      streamStarted = true;
       if (event === "stage" && data.stage === "extraction" && data.status === "started") {
         log.enqueue(() => {
           extractionBlock = addLogBlock(["Reading the protocol…"]);
@@ -323,16 +368,86 @@ async function startReading() {
 
     if (finalBrief) {
       state.brief = finalBrief;
-      setState(finalBrief.incomplete ? "incomplete" : "read");
+      if (state.extractionDetail && state.extractionDetail.chemicals === 0) {
+        // §16.2: not an error, an explanation — routes through the 'failed' state's
+        // bench-unlock behaviour but with distinct copy (see renderFailedPanel).
+        state.failureKind = "no_chemicals";
+        setState("failed");
+      } else {
+        setState(finalBrief.incomplete ? "incomplete" : "read");
+      }
     } else {
       throw new Error(sawUnrecoverableError ? "The protocol could not be read." : "Stream ended unexpectedly.");
     }
   } catch (err) {
     await log.whenDrained();
     state.lastError = err instanceof Error ? err.message : String(err);
-    setState("failed");
+    if (streamStarted) {
+      // §16.2: the stream produced real events before dying — freeze the log in
+      // place rather than hiding it behind the full failed panel.
+      freezeStageLogWithError();
+    } else {
+      state.failureKind = "error";
+      setState("failed");
+    }
   }
 }
+
+// §17: the brief has to leave the screen. Runs on the native print event
+// (button click OR the browser's own Ctrl+P / File>Print), so it fires no
+// matter how printing was triggered.
+function prepareForPrint() {
+  // §20/§17: nothing is ever lost, only folded — force every collapsible
+  // group open for the printed copy, remembering prior state to restore.
+  document.querySelectorAll(".chemical-block, .source-group, .gap-aggregate").forEach((el) => {
+    el.dataset.wasOpen = el.open ? "1" : "0";
+    el.open = true;
+  });
+
+  // §6.2/§17: a printed chip can't be clicked — turn it into a numbered
+  // reference and collect a references list, so the paper copy is still
+  // checkable, not just decorative.
+  const chips = Array.from(document.querySelectorAll(".chip[href]"));
+  if (!chips.length) return;
+
+  const lines = chips.map((chip, i) => {
+    const n = i + 1;
+    chip.dataset.printLabel = chip.textContent;
+    chip.textContent = `[${n}]`;
+    return `${n}. ${chip.dataset.printLabel} — ${chip.getAttribute("href")}`;
+  });
+
+  const list = document.createElement("div");
+  list.id = "print-footnotes";
+  const heading = document.createElement("p");
+  heading.className = "eyebrow";
+  heading.textContent = "SOURCES";
+  list.appendChild(heading);
+  for (const line of lines) {
+    const p = document.createElement("p");
+    p.className = "mono";
+    p.textContent = line;
+    list.appendChild(p);
+  }
+  document.querySelector(".sheet").appendChild(list);
+}
+
+function restoreAfterPrint() {
+  document.querySelectorAll(".chemical-block, .source-group, .gap-aggregate").forEach((el) => {
+    el.open = el.dataset.wasOpen === "1";
+    delete el.dataset.wasOpen;
+  });
+  document.querySelectorAll(".chip[data-print-label]").forEach((chip) => {
+    chip.textContent = chip.dataset.printLabel;
+    delete chip.dataset.printLabel;
+  });
+  const footnotes = document.getElementById("print-footnotes");
+  if (footnotes) footnotes.remove();
+}
+
+window.addEventListener("beforeprint", prepareForPrint);
+window.addEventListener("afterprint", restoreAfterPrint);
+printBtn.addEventListener("click", () => window.print());
 
 protocolInput.addEventListener("input", updateReadButtonEnabled);
 demoBtn.addEventListener("click", () => {

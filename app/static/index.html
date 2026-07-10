@@ -13,7 +13,6 @@
 <body>
   <div class="app" id="app" data-state="empty">
     <section class="pane pane-bench" aria-label="Protocol">
-      <div class="bench-gutter" aria-hidden="true" id="bench-gutter"></div>
       <div class="bench-content">
         <p class="eyebrow">PROTOCOL</p>
         <textarea
@@ -27,25 +26,51 @@
           <button type="button" id="demo-btn" class="btn btn-quiet">Load the demo protocol</button>
           <button type="button" id="read-btn" class="btn btn-primary" disabled>Read the protocol</button>
         </div>
+      </div>
+      <!-- §19.4: gutter + step rows stick together as one unit while the paper
+           pane scrolls past them, instead of leaving a void once the shorter
+           bench content scrolls out of view. Siblings in one flex row (not an
+           absolute overlay) so they move in exact lockstep — see thread.js. -->
+      <div class="bench-sticky" id="bench-sticky">
+        <div class="bench-gutter" aria-hidden="true" id="bench-gutter"></div>
         <div id="bench-steps" class="bench-steps" hidden></div>
       </div>
     </section>
 
     <section class="pane pane-paper" aria-label="Safety brief">
-      <div id="paper-empty" class="paper-panel paper-empty">
-        <p class="eyebrow">PRECAUTION</p>
-        <p class="empty-copy">Paste a protocol. PreCaution reads the steps, not just the reagents.</p>
+      <!-- §4.2: the brief is a bounded sheet sitting on the field, not the pane's
+           own flat background — three light surfaces, not one. -->
+      <div class="sheet">
+        <div id="paper-empty" class="paper-panel paper-empty">
+          <p class="eyebrow">PRECAUTION</p>
+          <p class="empty-copy">Paste a protocol. PreCaution reads the steps, not just the reagents.</p>
+          <div class="scope-boundary">
+            <p class="scope-line">
+              <span class="scope-label">Does —</span> find hazards that emerge from the procedure, not just the
+              ingredients: chemicals combined in a step, or waste streams converging across steps. Every claim
+              cites a source.
+            </p>
+            <p class="scope-line">
+              <span class="scope-label">Does not —</span> design experiments, suggest reagents or syntheses, or
+              replace your institution's EHS sign-off.
+            </p>
+          </div>
+        </div>
+
+        <div id="stage-log" class="paper-panel stage-log" hidden></div>
+
+        <div id="receipt" class="paper-panel receipt" hidden></div>
+
+        <div id="incomplete-banner" class="paper-panel incomplete-banner" hidden></div>
+
+        <div id="brief-output" class="paper-panel brief-output" hidden></div>
+
+        <div id="failed-panel" class="paper-panel failed-panel" hidden></div>
+
+        <!-- §17: a bench needs paper. Bottom of the paper pane, only meaningful
+             once there's a brief to print. -->
+        <button type="button" id="print-btn" class="btn btn-quiet print-btn" hidden>Print this brief</button>
       </div>
-
-      <div id="stage-log" class="paper-panel stage-log" hidden></div>
-
-      <div id="receipt" class="paper-panel receipt" hidden></div>
-
-      <div id="incomplete-banner" class="paper-panel incomplete-banner" hidden></div>
-
-      <div id="brief-output" class="paper-panel brief-output" hidden></div>
-
-      <div id="failed-panel" class="paper-panel failed-panel" hidden></div>
     </section>
   </div>
 
