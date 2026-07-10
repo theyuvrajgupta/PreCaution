@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.extraction import ExtractionError, extract  # noqa: E402
+from app.extraction import ExtractionError, extract
 
 
 def main() -> None:

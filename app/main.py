@@ -13,7 +13,12 @@ from pydantic import BaseModel
 
 from app.extraction import ExtractionError, extract
 from app.models import ExtractionResult
-from app.pipeline import PipelineResult, StreamMessage, run_pipeline, stream_pipeline_events
+from app.pipeline import (
+    PipelineResult,
+    StreamMessage,
+    run_pipeline,
+    stream_pipeline_events,
+)
 
 app = FastAPI(title="PreCaution")
 
@@ -27,7 +32,7 @@ def health() -> dict:
     return {"status": "ok"}
 
 
-@app.post("/extract", response_model=ExtractionResult)
+@app.post("/extract")
 def extract_endpoint(req: ExtractRequest) -> ExtractionResult:
     try:
         return extract(req.protocol_text)
@@ -35,7 +40,7 @@ def extract_endpoint(req: ExtractRequest) -> ExtractionResult:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
-@app.post("/brief", response_model=PipelineResult)
+@app.post("/brief")
 def brief_endpoint(req: ExtractRequest) -> PipelineResult:
     """Thin wrapper over run_pipeline, mirrors /extract. With app.pubchem.ground_chemical's
     grounding_error fix, this no longer crashes on a PubChem outage — it returns a

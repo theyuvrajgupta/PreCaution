@@ -25,7 +25,14 @@ from urllib.parse import quote
 import httpx
 
 from app import cache as _cache
-from app.models import ChemicalHazardProfile, GHSInfo, ReactiveGroupEntry, SafetyExcerpt, SafetyNote, SourceRef
+from app.models import (
+    ChemicalHazardProfile,
+    GHSInfo,
+    ReactiveGroupEntry,
+    SafetyExcerpt,
+    SafetyNote,
+    SourceRef,
+)
 
 PUG_REST_BASE = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
 PUG_VIEW_BASE = "https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound"
@@ -93,7 +100,7 @@ def _get_json(url: str, params: dict | None = None) -> dict | None:
         data = json.loads(resp.content)
         if "Fault" in data:
             return None  # well-formed "no data for this heading" — not an error, don't cache
-        _cache.set(url, params, data)
+        _cache.put(url, params, data)
         return data
 
     raise RuntimeError(f"PubChem request failed after {_MAX_RETRIES} attempts: {url}") from last_exc

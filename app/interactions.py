@@ -25,7 +25,12 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.interaction_matrix import InteractionVerdict, lookup_verdict
-from app.models import ChemicalHazardProfile, ExtractionResult, ReactiveGroupEntry, SourceRef
+from app.models import (
+    ChemicalHazardProfile,
+    ExtractionResult,
+    ReactiveGroupEntry,
+    SourceRef,
+)
 
 # CAMEO's own reactive-group taxonomy (surfaced live via app/pubchem.py) includes this
 # as a genuine assignment, not an absence of data — e.g. nitrogen is classified this way.
@@ -175,22 +180,22 @@ def find_step_interactions(
             groups_a = [g.group_name for g in entries_a]
             groups_b = [g.group_name for g in entries_b]
 
-            base = dict(
-                step_number=step.number,
-                chemical_a_id=chem_a.id,
-                chemical_b_id=chem_b.id,
-                chemical_a_name=chem_a.canonical_name,
-                chemical_b_name=chem_b.canonical_name,
-                origin_a=ref_a.origin,
-                origin_b=ref_b.origin,
-                added_step_a=_find_added_step(chem_a.id, step.number, result.steps),
-                added_step_b=_find_added_step(chem_b.id, step.number, result.steps),
-                vessel=step.vessel,
-                vessel_entry_step_a=_find_vessel_entry_step(chem_a.id, step.number, result.steps),
-                vessel_entry_step_b=_find_vessel_entry_step(chem_b.id, step.number, result.steps),
-                concentration_a=chem_a.concentration,
-                concentration_b=chem_b.concentration,
-            )
+            base = {
+                "step_number": step.number,
+                "chemical_a_id": chem_a.id,
+                "chemical_b_id": chem_b.id,
+                "chemical_a_name": chem_a.canonical_name,
+                "chemical_b_name": chem_b.canonical_name,
+                "origin_a": ref_a.origin,
+                "origin_b": ref_b.origin,
+                "added_step_a": _find_added_step(chem_a.id, step.number, result.steps),
+                "added_step_b": _find_added_step(chem_b.id, step.number, result.steps),
+                "vessel": step.vessel,
+                "vessel_entry_step_a": _find_vessel_entry_step(chem_a.id, step.number, result.steps),
+                "vessel_entry_step_b": _find_vessel_entry_step(chem_b.id, step.number, result.steps),
+                "concentration_a": chem_a.concentration,
+                "concentration_b": chem_b.concentration,
+            }
 
             if not groups_a or not groups_b:
                 missing = [name for name, groups in ((chem_a.canonical_name, groups_a), (chem_b.canonical_name, groups_b)) if not groups]

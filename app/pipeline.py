@@ -17,7 +17,8 @@ orchestration and progress-event emission are new.
 """
 
 import asyncio
-from typing import AsyncIterator, Literal
+from collections.abc import AsyncIterator
+from typing import Literal
 
 from pydantic import BaseModel
 

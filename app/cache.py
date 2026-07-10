@@ -28,7 +28,7 @@ def get(url: str, params: dict | None = None) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def set(url: str, params: dict | None, value: dict) -> None:
+def put(url: str, params: dict | None, value: dict) -> None:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path = CACHE_DIR / f"{_key(url, params)}.json"
     path.write_text(json.dumps(value), encoding="utf-8")

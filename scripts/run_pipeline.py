@@ -16,8 +16,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.extraction import ExtractionError  # noqa: E402
-from app.pipeline import run_pipeline  # noqa: E402
+from app.extraction import ExtractionError
+from app.pipeline import run_pipeline
 
 
 def main() -> None:
