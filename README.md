@@ -30,6 +30,19 @@ Hallucinated hazard data is the top reason scientists abandon AI safety tools, s
 - **Missing data is never silent.** If no authoritative hazard data exists for a chemical, the brief says so explicitly rather than implying it's safe.
 - **The final brief (Stage 4) is pure composition — zero Claude calls.** `build_brief()` copies already-fetched fields into rendered statements; it doesn't select, rank, or write anything. This is a deliberate design decision, not a cost shortcut: with no generation step in the render path, there is no mechanism by which an ungrounded claim could enter the brief.
 
+**"No data does not mean safe" is tested, not just stated, on the two least interesting
+chemicals in the demo protocol.** Water and phosphate-buffered saline both show no signal
+word and no pictogram in the brief — at a glance, identical. They are not the same kind of
+absence. Water carries a real GHS Classification record, sourced to the European Chemicals
+Agency (EC 231-791-2): "Not Classified," based on 1866 of 1876 self-reporting companies
+finding no GHS hazard — a positive, checkable finding of non-hazard from a named regulatory
+body. Phosphate-buffered saline has no GHS record in PubChem at all — not "checked and found
+safe," just never checked. The brief cites these differently and expands into different
+content: water gets its own GHS Classification panel with the ECHA citation; PBS gets a gap
+card that names GHS classification explicitly as one of the sections with no data, right next
+to the standing disclaimer that absence is never evidence of safety. Water is classified and
+benign; PBS is unclassified. The tool knows the difference and shows its work for both.
+
 **What's grounded, precisely — not a blanket claim.** "Looked up, not generated" is true for per-chemical hazard data (Stage 2) and for the pairwise danger verdict itself (Stage 3, the matrix lookup). It is *not* true for Stage 1: which chemicals a protocol mentions, and which pairs even get checked, is Claude reading the protocol text, and isn't independently re-verified. The brief marks these step-attribution claims `unverified` rather than blurring the line — see the first item under Limitations for why this is the largest gap in the method, not a footnote.
 
 **A finding worth stating plainly: even the authoritative PPE data isn't calibrated for the
