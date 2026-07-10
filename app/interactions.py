@@ -86,6 +86,14 @@ class ChemicalPairFinding(BaseModel):
     )
 
 
+def _cap(text: str) -> str:
+    """First-letter capitalization only — never .capitalize(), which would lowercase
+    the rest of the string too. Chemical names are correctly lowercase mid-sentence;
+    this exists only for the one statement here that happens to lead with one (see
+    UI_Design_Spec.md §9's sentence-case rule, and app/brief.py's identical helper)."""
+    return text[:1].upper() + text[1:] if text else text
+
+
 def _find_classification(name: str, entries: list[ReactiveGroupEntry], group_name: str) -> ReactiveGroupEntry | None:
     return next((e for e in entries if e.group_name == group_name), None)
 
@@ -141,7 +149,7 @@ def _no_data_note(
     classified = [(name, entry) for name, entry in classified if entry is not None]
     if classified:
         stated = " and ".join(f"{name} is classified **{_NOT_REACTIVE_GROUP}**" for name, _ in classified)
-        text = (
+        text = _cap(
             f"{stated} (CAMEO). This does not establish that combining {name_a} and {name_b} is safe — "
             f"only that {'this chemical has' if len(classified) == 1 else 'these chemicals have'} no known "
             f"reactive hazard class of its own. Consult an SDS."

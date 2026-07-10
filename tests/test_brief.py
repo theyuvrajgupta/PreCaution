@@ -344,16 +344,18 @@ def test_interaction_lead_in_shows_concentration_when_known():
     peroxide_acid = next(
         s for s in brief.statements if s.kind == "interaction_hazard" and set(s.pair) == {"c1", "c2"}
     )
-    assert "hydrogen peroxide (30%)" in peroxide_acid.lead_in
-    assert "sulfuric acid (concentrated)" in peroxide_acid.lead_in
+    # This scaffold's c1+c2 pair only co-occurs at step 1 (single step), so this hits
+    # the "Combining X and Y." branch — already correct as-is (starts with the
+    # authored verb; both chemical names are correctly mid-sentence lowercase).
+    assert "Combining hydrogen peroxide (30%) and sulfuric acid (concentrated)." == peroxide_acid.lead_in
 
     azide_acid = next(
         s for s in brief.statements if s.kind == "interaction_hazard" and set(s.pair) == {"c2", "c3"}
     )
     # c3 = sodium azide has no concentration set in this scaffold — must omit cleanly,
     # never render a stray "()".
-    assert "sodium azide ()" not in azide_acid.lead_in
-    assert "sodium azide (added in step 5)" in azide_acid.lead_in
+    assert "Sodium azide ()" not in azide_acid.lead_in
+    assert "Sodium azide (added in step 5)" in azide_acid.lead_in
     # This scaffold only has steps 1 and 5 (no step 4 vessel-transition data), so the
     # vessel-entry clause has nothing to attach to and origin falls back to a plain
     # carried-over phrase — concentration still leads the parenthetical.
@@ -370,12 +372,12 @@ def test_hazard_identity_shows_concentration_when_known():
     peroxide_identity = next(
         s for s in brief.statements if s.kind == "hazard_identity" and "c1" in s.chemical_ids
     )
-    assert peroxide_identity.text.startswith("hydrogen peroxide (30%):")
+    assert peroxide_identity.text.startswith("Hydrogen peroxide (30%):")
 
     azide_identity = next(
         s for s in brief.statements if s.kind == "hazard_identity" and "c3" in s.chemical_ids
     )
-    assert azide_identity.text.startswith("sodium azide:")  # no concentration set in this scaffold
+    assert azide_identity.text.startswith("Sodium azide:")  # no concentration set in this scaffold
 
 
 def test_interaction_hazard_chip_text_is_exactly_the_quote():

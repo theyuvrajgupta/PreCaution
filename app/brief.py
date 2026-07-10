@@ -75,6 +75,15 @@ def _sentence(text: str) -> str:
     return text + "."
 
 
+def _cap(text: str) -> str:
+    """First-letter capitalization only — never .capitalize(), which would lowercase
+    the rest of the string too (mangling e.g. "NaN3 reacts..." into "Nan3 reacts...").
+    Chemical names are correctly lowercase mid-sentence (they're not proper nouns); this
+    exists only for the handful of statements where one happens to lead a rendered block,
+    which UI_Design_Spec.md §9's sentence-case rule still requires a capital for."""
+    return text[:1].upper() + text[1:] if text else text
+
+
 def _named(name: str, concentration: str | None) -> str:
     """A chemical's name with its extracted concentration parenthesized when known —
     e.g. "sodium azide (0.02%)". Concentration is captured at extraction and shown here
@@ -92,7 +101,7 @@ def _hazard_identity_text(canonical_name: str, ghs: GHSInfo, concentration: str 
     if ghs.hazard_statements:
         parts.append(" ".join(_sentence(h) for h in ghs.hazard_statements))
     body = " ".join(parts) if parts else "No further hazard detail on file."
-    return f"{_named(canonical_name, concentration)}: {body}"
+    return _cap(f"{_named(canonical_name, concentration)}: {body}")
 
 
 def _precautionary_text(canonical_name: str, codes: list[str]) -> str:
@@ -209,7 +218,7 @@ def _chemical_statements(chemical: Chemical, profile: ChemicalHazardProfile) -> 
     if short_labels:
         statements.append(
             BriefStatement(
-                text=(
+                text=_cap(
                     f"{chemical.canonical_name} — no {_join_with_or(short_labels)} data in PubChem. "
                     "This does not mean it is hazard-free — consult its SDS directly."
                 ),
@@ -279,7 +288,7 @@ def _lead_in(finding: ChemicalPairFinding, step_numbers: list[int]) -> str:
         a_name = _named(finding.chemical_a_name, finding.concentration_a)
         b_name = _named(finding.chemical_b_name, finding.concentration_b)
         if len(step_numbers) > 1:
-            return (
+            return _cap(
                 f"{a_name} and {b_name}, combined in step "
                 f"{finding.step_number}, co-present through step {step_numbers[-1]}."
             )
@@ -292,7 +301,7 @@ def _lead_in(finding: ChemicalPairFinding, step_numbers: list[int]) -> str:
         finding.chemical_b_name, finding.origin_b, finding.added_step_b, finding.vessel_entry_step_b,
         finding.vessel, finding.concentration_b,
     )
-    return f"{a} meets {b}."
+    return _cap(f"{a} meets {b}.")
 
 
 def _render_quote(verdict: InteractionVerdict, protocol_chemical_names: set[str]) -> str:

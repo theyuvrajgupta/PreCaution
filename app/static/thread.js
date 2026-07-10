@@ -13,6 +13,8 @@
 // text sourced from Claude's read of the protocol, not a lookup), which is
 // why the unverified marker lives here rather than duplicated in the brief.
 
+import { cap } from "./render.js";
+
 const UNVERIFIED_TIP = "Claude read this from the protocol text. It was not looked up. Verify the step attribution.";
 
 function clearChildren(el) {
@@ -95,7 +97,7 @@ function buildStepRow(step, isLoadBearing) {
   if (step.vessel) {
     const vessel = document.createElement("p");
     vessel.className = "mono bench-step-vessel";
-    vessel.textContent = `⌐ vessel: ${step.vessel}`;
+    vessel.textContent = `⌐ ${cap(`vessel: ${step.vessel}`)}`;
     row.appendChild(vessel);
   }
 

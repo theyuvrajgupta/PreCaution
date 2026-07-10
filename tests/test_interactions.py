@@ -206,7 +206,7 @@ def test_not_chemically_reactive_pair_states_classification_not_absence():
     assert len(findings) == 1
     finding = findings[0]
     assert finding.status == "no_established_data"  # still not a matrix hazard verdict
-    assert "nitrogen is classified **Not Chemically Reactive**" in finding.note
+    assert "Nitrogen is classified **Not Chemically Reactive**" in finding.note  # sentence-case leading fragment
     assert "does not establish" in finding.note  # never concludes safety
     assert finding.classification_source is not None
     assert finding.classification_source.url == "https://cameochemicals.noaa.gov/chemical/x"

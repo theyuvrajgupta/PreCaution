@@ -11,6 +11,16 @@
 
 const SAFETY_NOTE_KINDS = ["ppe", "first_aid", "disposal", "storage"];
 
+// First-letter capitalization only — chemical names are correctly lowercase
+// mid-sentence (they're not proper nouns); this exists only for the collapsed-row
+// name, which leads its own block and needs a capital per UI_Design_Spec.md §9's
+// sentence-case rule (mirrors app/brief.py's _cap()). Never String.prototype
+// equivalent of .capitalize() — this leaves everything after the first character
+// untouched.
+export function cap(text) {
+  return text ? text[0].toUpperCase() + text.slice(1) : text;
+}
+
 // §20.2: per-chemical safety-note excerpts are grouped by source/audience, not
 // dumped flat — a per-chemical wall of 50+ statements is the thing this
 // section exists to fix. Render order locked to the spec: NIOSH -> ERG ->
@@ -310,7 +320,7 @@ function renderChemicalRow(record, brief, gloveState) {
   nameEl.className = "step-title";
   // Concentration is captured at extraction and shown here so it isn't silently
   // dropped — it never changes any hazard verdict (see README limitations).
-  nameEl.textContent = record.concentration ? `${record.name} (${record.concentration})` : record.name;
+  nameEl.textContent = cap(record.concentration ? `${record.name} (${record.concentration})` : record.name);
   summary.appendChild(nameEl);
   if (hazardIdentity && hazardIdentity.signal_word) {
     const badge = document.createElement("span");
