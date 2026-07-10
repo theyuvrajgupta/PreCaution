@@ -32,17 +32,36 @@ Fix, structural not cosmetic: `InteractionVerdict` no longer has a single
 datasheet — the ONLY thing that may render under the source chip) and an
 optional `note` (authored, rendered as a separate unchipped line, nominal
 facts only — e.g. a common name — never a hazard claim). See
-`tests/test_interaction_matrix.py::test_quote_is_grounded_in_the_source_page`
+`tests/test_interaction_matrix.py::test_quote_never_contains_authored_prose`
 for the check that keeps this from silently regressing.
+
+**Categories vs. example — second structural fix, same day, same root cause
+(right quote, wrong chemicals).** RG44-RG2's quote was verbatim and correctly
+cited, but its only chemical-specific sentence ("Metal chlorates react
+violently with H2SO4...") names a *different member* of the oxidizer group
+(metal chlorates) than the one actually in the protocol (hydrogen peroxide).
+CAMEO's reactive-group pages document a handful of specific example
+reactions per group pair, not one per member — quoting whichever example
+happens to be on the page, regardless of which chemical it's about, produces
+a citation that is real but misleading. `InteractionVerdict` now separates
+`categories` (the group-level hazard-prediction lines — always safe to
+quote, since they make no claim about which specific chemical is involved)
+from `example` + `example_chemicals` (a documented instance naming specific
+chemicals, plus exactly which chemical names must be present in the protocol
+for that instance to be relevant). `app/brief.py` renders `example` only
+when every name in `example_chemicals` resolves to a chemical in the
+protocol being briefed — deterministic, no model call. See
+`tests/test_interaction_matrix.py::test_example_never_ships_without_its_required_chemicals`.
 
 Provenance: every quote below was fetched directly from CAMEO's own pairwise
 reactivity-documentation pages (not the generic single-group datasheets,
 which don't carry pair-specific predictions) on 2026-07-10 during the item-1
-audit — re-verifying and superseding the 2026-07-09 seed entries, which had
-cited the generic /react/<id> URLs. This is a SEED set covering only the
-pairs the locked demo protocol needs. Extend deliberately: fetch the actual
-*pairwise* datasheet for any new pair before adding it, never from memory,
-and never let authored prose share a string with a quote.
+audit and its same-day follow-up — re-verifying and superseding the
+2026-07-09 seed entries, which had cited the generic /react/<id> URLs. This
+is a SEED set covering only the pairs the locked demo protocol needs. Extend
+deliberately: fetch the actual *pairwise* datasheet for any new pair before
+adding it, never from memory, and never let authored prose share a string
+with a quote.
 """
 
 from pydantic import BaseModel, Field
@@ -54,8 +73,26 @@ class InteractionVerdict(BaseModel):
     group_a: str
     group_b: str
     hazard_types: list[str]
-    quote: str = Field(description="Verbatim or near-verbatim text from the CAMEO pairwise reactivity-documentation "
-                                    "page. The ONLY field that may render under the source chip.")
+    categories: str = Field(
+        description="Verbatim group-level hazard-category predictions from the CAMEO pairwise "
+        "reactivity-documentation page (e.g. 'Explosive: ...'). Always safe to quote regardless of which "
+        "specific chemicals are in the protocol — these are class-level, not instance-level, claims."
+    )
+    example: str | None = Field(
+        default=None,
+        description="A verbatim documented-example sentence from the same page, naming specific chemicals. "
+        "Only ever rendered when every name in example_chemicals is present in the protocol being briefed "
+        "(app/brief.py) — otherwise it would cite a real CAMEO sentence as if it were about chemicals that "
+        "were never used.",
+    )
+    example_chemicals: list[str] | None = Field(
+        default=None,
+        description="canonical_name-style chemical names that must ALL be present in the protocol for "
+        "`example` to be included. Curated, not a mechanical extraction of every noun in the sentence: an "
+        "'X reacts with Y or Z' example only requires the alternative actually present, and a named reaction "
+        "PRODUCT is never a requirement (it's an output, not an input to check for). None/empty if `example` "
+        "is None.",
+    )
     note: str | None = Field(
         default=None,
         description="Authored, e.g. a common name for the combination. Rendered as a separate line, visibly "
@@ -75,16 +112,20 @@ def _add(
     group_a: str,
     group_b: str,
     hazard_types: list[str],
-    quote: str,
+    categories: str,
     source_url: str,
     source_detail: str,
+    example: str | None = None,
+    example_chemicals: list[str] | None = None,
     note: str | None = None,
 ) -> None:
     verdict = InteractionVerdict(
         group_a=group_a,
         group_b=group_b,
         hazard_types=hazard_types,
-        quote=quote,
+        categories=categories,
+        example=example,
+        example_chemicals=example_chemicals,
         note=note,
         source=SourceRef(
             source_name="CAMEO Chemicals reactivity documentation",
@@ -102,13 +143,15 @@ _add(
     "Oxidizing Agents, Strong",
     "Acids, Strong Oxidizing",
     hazard_types=["explosion", "toxic_gas"],
-    quote=(
+    categories=(
         "Explosive: Reaction products may be explosive or sensitive to shock or friction. Generates gas: "
         "Reaction liberates gaseous products and may cause pressurization. Intense or explosive reaction: "
-        "Reaction may be particularly intense, violent, or explosive. Toxic: Reaction products may be toxic. "
-        "Metal chlorates react violently with H2SO4 and other oxidizing acids, evolving explosive and toxic "
-        "ClO2 gas."
+        "Reaction may be particularly intense, violent, or explosive. Toxic: Reaction products may be toxic."
     ),
+    # Re-checked 2026-07-10 (item-1 follow-up): RG44-RG2's only documented example names metal
+    # chlorates, not hydrogen peroxide — no example on this page involves hydrogen peroxide
+    # specifically. Leaving example unset rather than quoting a different oxidizer's example under
+    # this pair's chip; add a hydrogen-peroxide-specific example here only if CAMEO adds one.
     note='Hydrogen peroxide and concentrated sulfuric acid, in this combination, are commonly called "piranha solution."',
     source_url="https://cameochemicals.noaa.gov/reactivity/documentation/RG44-RG2",
     source_detail="Reactivity Documentation: Oxidizing Agents, Strong × Acids, Strong Oxidizing",
@@ -118,13 +161,20 @@ _add(
     "Azo, Diazo, Azido, Hydrazine, and Azide Compounds",
     "Acids, Strong Oxidizing",
     hazard_types=["explosion", "toxic_gas", "heat"],
-    quote=(
+    categories=(
         "Flammable: Reaction products may be flammable. Generates gas: Reaction liberates gaseous products and "
         "may cause pressurization. Generates heat: Exothermic reaction at ambient temperatures (releases heat). "
         "Intense or explosive reaction: Reaction may be particularly intense, violent, or explosive. Toxic: "
-        "Reaction products may be toxic. NaN3 reacts violently with H2SO4 or HNO3, and the reaction evolves "
-        "toxic and flammable HN3 at ambient temperature."
+        "Reaction products may be toxic."
     ),
+    example=(
+        "NaN3 reacts violently with H2SO4 or HNO3, and the reaction evolves toxic and flammable HN3 at ambient "
+        "temperature."
+    ),
+    # Names two alternative oxidizing acids ("H2SO4 or HNO3"); require only the one this protocol
+    # actually has (sulfuric acid) plus the azide itself — nitric acid is an alternative, not a
+    # co-requirement, and HN3 is the reaction PRODUCT, not an input chemical to check for.
+    example_chemicals=["sodium azide", "sulfuric acid"],
     source_url="https://cameochemicals.noaa.gov/reactivity/documentation/RG8-RG2",
     source_detail="Reactivity Documentation: Azo, Diazo, Azido, Hydrazine, and Azide Compounds × Acids, Strong Oxidizing",
 )
@@ -133,13 +183,17 @@ _add(
     "Azo, Diazo, Azido, Hydrazine, and Azide Compounds",
     "Acids, Strong Non-oxidizing",
     hazard_types=["explosion", "toxic_gas", "heat"],
-    quote=(
+    categories=(
         "Explosive: Reaction products may be explosive or sensitive to shock or friction. Flammable: Reaction "
         "products may be flammable. Generates gas: Reaction liberates gaseous products and may cause "
         "pressurization. Generates heat: Exothermic reaction at ambient temperatures (releases heat). Toxic: "
         "Reaction products may be toxic. Combining azides and acids may yield gaseous HN3, which is toxic and "
         "flammable."
     ),
+    # Re-checked 2026-07-10: this page's documented examples name only generic classes ("azides",
+    # "inorganic acids", "organic azides"), never a specific compound — nothing here rises to a
+    # chemical-specific example under this rule, so the class-level sentence stays in categories
+    # rather than being held out as `example` (which would have no example_chemicals to check).
     source_url="https://cameochemicals.noaa.gov/reactivity/documentation/RG8-RG1",
     source_detail="Reactivity Documentation: Azo, Diazo, Azido, Hydrazine, and Azide Compounds × Acids, Strong Non-oxidizing",
 )
