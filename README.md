@@ -85,20 +85,22 @@ generated" does and doesn't cover.
    stage, and nothing downstream would notice. The brief marks step-attribution
    `unverified` rather than hiding this, but that's a disclosure, not a fix — Stage 2/3 can
    independently re-derive a hazard verdict from a CID; nothing independently re-derives
-   the pair set.
-2. **Concentration is extracted and never used.** The demo protocol specifies 0.02% sodium
-   azide in buffer. PreCaution flags the azide-plus-acid hazard identically whether the
-   carboy holds a 0.02% trace or solid NaN₃ — `Chemical.concentration` is captured at
-   extraction and never read again by any later stage.
+   the pair set. See Roadmap.
+2. **Concentration is captured and shown, but never changes a verdict.** The demo protocol
+   specifies 0.02% sodium azide in buffer — PreCaution now names it next to the chemical
+   wherever it's mentioned (e.g. "sodium azide (0.02%)"), so it's no longer silently
+   dropped. But the azide-plus-acid hazard is still flagged identically whether the carboy
+   holds a 0.02% trace or solid NaN₃: `Chemical.concentration` is displayed, not read by
+   any hazard logic — no concentration-threshold data is grounded for that.
 3. **Order of addition is not modeled.** The demo protocol correctly adds peroxide to
    acid. Reverse it — the dangerous order, and a real mistake newcomers make — and
    PreCaution produces the same brief: the interaction matrix keys off which reactive
-   groups are co-present in a step, not which chemical entered first.
+   groups are co-present in a step, not which chemical entered first. See Roadmap.
 4. **No model of consumption.** Spent piranha solution is called "spent" because the
    peroxide has largely reacted away, but the `carried_over` origin model has no concept of
    a reagent being consumed — step 4's carboy is treated as holding the original reagents.
    This errs toward over-warning, the correct direction for a safety tool, but it's a
-   simplification, not a physical model.
+   simplification, not a physical model. See Roadmap.
 5. **The interaction matrix flags a dangerous reaction *class*, not this specific
    reaction.** Temperature isn't modeled either — all of it matters for the real piranha
    reaction, and none of it reaches the verdict.
@@ -139,7 +141,7 @@ pytest tests/test_pubchem.py             # one file
 pytest tests/test_pubchem.py::test_parse_ghs_classification_offline   # one test
 ```
 
-55 tests passed, 3 deselected (`costly`) as of the last full run. `tests/test_brief.py::test_every_brief_statement_has_resolvable_source_ref` is what makes "every claim is sourced" a passing test, not just a README assertion — it fails the build if any statement in the brief is missing a `source_ref`, and grounded statement kinds must also carry a `source_url`.
+58 tests passed, 3 deselected (`costly`) as of the last full run. `tests/test_brief.py::test_every_brief_statement_has_resolvable_source_ref` is what makes "every claim is sourced" a passing test, not just a README assertion — it fails the build if any statement in the brief is missing a `source_ref`, and grounded statement kinds must also carry a `source_url`.
 
 ## Running it
 
@@ -167,9 +169,22 @@ PubChem's own latency.
 - **Agentic build-time matrix extender** — an agent that fetches a new CAMEO reactive-group
   datasheet, proposes an interaction-matrix entry with the source quote attached, and hands it to
   a human for review before it's added. Keeps the matrix's "fetched and quoted, not recalled" rule
-  intact while it grows past the current hand-picked seed set.
+  intact while it grows past the current hand-picked seed set — and is exactly the mechanism that
+  would grow the matrix past its current three entries, and eventually cover pairs beyond what a
+  strictly pairwise model can (limitations #7, #10).
 - **Byproduct grounding** — a reaction's byproduct (e.g. hydrazoic acid) has its own PubChem CID
   and could be grounded the same way its precursors are.
+- **Order-of-addition awareness** (limitation #3) — needs a Stage 1 schema and prompt addition
+  capturing which chemical is the recipient vs. the added stream, re-verified against fixtures
+  before it feeds any hazard logic. A text-regex heuristic over `step.text` was considered and
+  rejected: it would sometimes get the direction wrong and *sound* grounded when it isn't, which
+  is worse than the current honest "not modeled" disclosure.
+- **A coarse consumption/depletion signal** (limitation #4) — e.g. flagging when extraction
+  identifies a step as a reaction/consumption step, rather than treating every `carried_over`
+  presence as the original, undiminished reagent. Real scope, not a caveat-text patch.
+- **An independent check on which pairs get evaluated** (limitation #1, the largest one) — some
+  way to catch a pair Stage 1 never constructs, short of a second extraction pass. Undesigned;
+  listed because it's the limitation most worth solving, not because a shape is settled yet.
 
 ## Status
 
