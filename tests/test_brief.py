@@ -16,6 +16,7 @@ from app.models import (
     ExtractionResult,
     GHSInfo,
     ReactiveGroupEntry,
+    SafetyExcerpt,
     SafetyNote,
     SourceRef,
     Step,
@@ -38,6 +39,7 @@ def _full_profile(canonical_name: str, cid: int, group_name: str | None = None) 
         ]
     ghs = GHSInfo(
         pictograms=["Corrosive"],
+        pictogram_urls=["https://pubchem.ncbi.nlm.nih.gov/images/ghs/GHS05.svg"],
         signal_word="Danger",
         hazard_statements=["H314: Causes severe skin burns and eye damage"],
         precautionary_statements=["P260", "P280", "P305+P351+P338"],
@@ -46,26 +48,57 @@ def _full_profile(canonical_name: str, cid: int, group_name: str | None = None) 
             url=f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}#section=GHS-Classification",
         ),
     )
+    pubchem_ref = SourceRef(source_name="PubChem", url=f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}")
     safety_notes = [
         SafetyNote(
             heading="Personal Protective Equipment (PPE)",
-            text="Wear chemical-resistant gloves | Wear safety goggles or a face shield",
-            source=SourceRef(source_name="PubChem", url=f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}"),
+            excerpts=[
+                SafetyExcerpt(
+                    source_label=f"NIOSH Pocket Guide for {canonical_name}",
+                    audience="niosh",
+                    text="Wear safety goggles or a face shield.",
+                    source=pubchem_ref,
+                ),
+                SafetyExcerpt(
+                    source_label="ERG Guide 140 [Oxidizers]",
+                    audience="erg",
+                    text="Wear positive pressure self-contained breathing apparatus (SCBA).",
+                    source=pubchem_ref,
+                ),
+            ],
         ),
         SafetyNote(
             heading="First Aid Measures",
-            text="Flush eyes with water for at least 15 minutes | Remove contaminated clothing",
-            source=SourceRef(source_name="PubChem", url=f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}"),
+            excerpts=[
+                SafetyExcerpt(
+                    source_label="PubChem",
+                    audience="other",
+                    text="Flush eyes with water for at least 15 minutes. Remove contaminated clothing.",
+                    source=pubchem_ref,
+                ),
+            ],
         ),
         SafetyNote(
             heading="Disposal Methods",
-            text="Dispose of contents/container in accordance with local regulations",
-            source=SourceRef(source_name="PubChem", url=f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}"),
+            excerpts=[
+                SafetyExcerpt(
+                    source_label="PubChem",
+                    audience="other",
+                    text="Dispose of contents/container in accordance with local regulations.",
+                    source=pubchem_ref,
+                ),
+            ],
         ),
         SafetyNote(
             heading="Storage Conditions",
-            text="Store in a cool, dry, well-ventilated place away from incompatible materials",
-            source=SourceRef(source_name="PubChem", url=f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}"),
+            excerpts=[
+                SafetyExcerpt(
+                    source_label="PubChem",
+                    audience="other",
+                    text="Store in a cool, dry, well-ventilated place away from incompatible materials.",
+                    source=pubchem_ref,
+                ),
+            ],
         ),
     ]
     return ChemicalHazardProfile(
@@ -102,6 +135,56 @@ def test_every_brief_statement_has_resolvable_source_ref():
         assert statement.source_ref, f"{statement.kind} statement has no source_ref: {statement.text!r}"
         if statement.kind in grounded_kinds:
             assert statement.source_url, f"{statement.kind} statement has no source_url: {statement.text!r}"
+
+
+def test_unresolved_mentions_are_surfaced_as_statements():
+    result = _demo_extraction_result()
+    result = result.model_copy(update={"unresolved_mentions": ["the buffer stock solution"]})
+    profiles = _fully_grounded_demo_profiles()
+    findings = find_step_interactions(result, profiles)
+
+    brief = build_brief(result, profiles, findings)
+
+    unresolved = [s for s in brief.statements if s.kind == "unresolved_mention"]
+    assert len(unresolved) == 1
+    assert "the buffer stock solution" in unresolved[0].text
+    assert unresolved[0].unverified is True
+    assert unresolved[0].source_ref
+
+
+def test_hazard_identity_carries_pictogram_urls():
+    result = _demo_extraction_result()
+    profiles = _fully_grounded_demo_profiles()
+    findings = find_step_interactions(result, profiles)
+
+    brief = build_brief(result, profiles, findings)
+
+    hazard_identity = [s for s in brief.statements if s.kind == "hazard_identity"]
+    assert hazard_identity
+    for s in hazard_identity:
+        assert s.pictogram_urls == ["https://pubchem.ncbi.nlm.nih.gov/images/ghs/GHS05.svg"]
+        assert s.pictogram_labels == ["Corrosive"]
+    # Only hazard_identity carries pictograms — no other kind should.
+    non_hazard = [s for s in brief.statements if s.kind != "hazard_identity"]
+    assert all(not s.pictogram_urls for s in non_hazard)
+
+
+def test_precautionary_statement_resolves_known_p_codes():
+    result = _demo_extraction_result()
+    profiles = _fully_grounded_demo_profiles()
+    findings = find_step_interactions(result, profiles)
+
+    brief = build_brief(result, profiles, findings)
+
+    precautionary = [s for s in brief.statements if s.kind == "precautionary" and "hydrogen peroxide" in s.text]
+    assert precautionary
+    text = precautionary[0].text
+    # Known codes resolve to their official GHS text, not a bare code.
+    assert "P260 — Do not breathe dust/fume/gas/mist/vapours/spray." in text
+    assert "P280 — Wear protective gloves" in text
+    # An unresolved code (not in our small demo-scoped table) falls back to the
+    # bare code rather than inventing text — honest omission, not silently dropped.
+    assert "P305+P351+P338" in text
 
 
 def test_glove_disclosure_is_present_and_own_statement():
@@ -196,6 +279,39 @@ def test_missing_heading_emits_no_data():
     assert matches
 
 
+def test_missing_sections_aggregate_into_one_card_per_chemical():
+    """Item 3: a chemical missing all five headings used to emit five near-identical
+    "no data" cards (water/nitrogen/PBS each did) — that's the gap flood recreated one
+    level down from the pair-gap aggregation. One card per chemical now, listing which
+    sections are absent, still surfacing the gap honestly.
+    """
+    result = _demo_extraction_result()
+    profiles = _fully_grounded_demo_profiles()
+    acid = profiles["sulfuric acid"]
+    acid.ghs = None
+    acid.safety_notes = []
+    acid.missing_sections = [
+        "GHS Classification",
+        "Personal Protective Equipment (PPE)",
+        "First Aid Measures",
+        "Disposal Methods",
+        "Storage Conditions",
+    ]
+    findings = find_step_interactions(result, profiles)
+
+    brief = build_brief(result, profiles, findings)
+
+    gap_cards = [s for s in brief.statements if s.kind == "no_data" and "c2" in s.chemical_ids]
+    assert len(gap_cards) == 1  # not five
+    text = gap_cards[0].text
+    assert "GHS classification" in text
+    assert "PPE" in text
+    assert "first aid" in text
+    assert "disposal" in text
+    assert "storage" in text
+    assert "hazard-free" in text  # honest-omission language survives the aggregation
+
+
 def test_piranha_interaction_hazard_statement_present():
     result = _demo_extraction_result()
     profiles = _fully_grounded_demo_profiles()
@@ -208,8 +324,39 @@ def test_piranha_interaction_hazard_statement_present():
     assert hazard[0].pair == ("c1", "c2")
     assert hazard[0].step_numbers == [1]  # this scaffold only has c1+c2 co-present in step 1
     assert "cameochemicals.noaa.gov" in (hazard[0].source_url or "")
-    assert hazard[0].source_ref == "NOAA CAMEO react/44"  # short, chip-ready — not a citation sentence
+    # short, chip-ready — not a citation sentence; the pairwise reactivity-documentation
+    # page, not the generic single-group datasheet (2026-07-10 audit)
+    assert hazard[0].source_ref == "NOAA CAMEO documentation/RG44-RG2"
     assert "Step 1:" not in hazard[0].text  # step number lives in step_numbers, not baked into prose
+
+
+def test_interaction_hazard_chip_text_is_exactly_the_quote():
+    """The item-1 audit fix, locked in as a test: the chipped block (BriefStatement.text)
+    must be composed ENTIRELY from InteractionVerdict.quote — never concatenated with
+    authored prose like "Combining X and Y" or a note. That authored framing lives in
+    `lead_in` / `hazard_note` instead, both rendered separately with no chip. This is what
+    makes it structurally impossible (not just a wording convention) to reintroduce the
+    bug where an authored sentence rendered under a government-source citation chip.
+    """
+    result = _demo_extraction_result()
+    profiles = _fully_grounded_demo_profiles()
+    findings = find_step_interactions(result, profiles)
+
+    brief = build_brief(result, profiles, findings)
+
+    hazards = [s for s in brief.statements if s.kind == "interaction_hazard"]
+    assert hazards
+    for statement in hazards:
+        pair_findings = [f for f in findings if {f.chemical_a_id, f.chemical_b_id} == set(statement.pair)]
+        verdict = pair_findings[0].verdict
+        assert verdict is not None
+        assert statement.text == verdict.quote
+        # No word from lead_in/hazard_note may appear in text unless it's already in the
+        # quote itself — guards against a future edit re-merging the fields.
+        if statement.lead_in:
+            assert statement.lead_in not in statement.text
+        if statement.hazard_note:
+            assert statement.hazard_note not in statement.text
 
 
 def test_interaction_no_data_is_surfaced():

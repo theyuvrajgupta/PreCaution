@@ -30,6 +30,7 @@ from app.models import (
     GHSInfo,
     Step,
 )
+from app.precautionary_codes import resolve_precautionary_code
 
 # Maps a PubChem safety-note heading (see app.pubchem.SAFETY_NOTE_HEADINGS) to
 # the BriefKind it renders as.
@@ -40,14 +41,22 @@ _SAFETY_NOTE_KIND = {
     "Storage Conditions": "storage",
 }
 
-# Human-readable label for a missing_sections heading, used in honest-omission text.
-_MISSING_SECTION_LABEL = {
-    "GHS Classification": "GHS hazard classification",
-    "Personal Protective Equipment (PPE)": "PPE guidance",
-    "First Aid Measures": "first aid guidance",
-    "Disposal Methods": "disposal guidance",
-    "Storage Conditions": "storage guidance",
+# Short noun form of a missing_sections heading, for the AGGREGATED per-chemical gap
+# statement (item 3, 2026-07-10: one card per chemical, not one per missing heading —
+# five missing headings used to mean five near-identical "no data" cards per chemical).
+_MISSING_SECTION_SHORT_LABEL = {
+    "GHS Classification": "GHS classification",
+    "Personal Protective Equipment (PPE)": "PPE",
+    "First Aid Measures": "first aid",
+    "Disposal Methods": "disposal",
+    "Storage Conditions": "storage",
 }
+
+
+def _join_with_or(items: list[str]) -> str:
+    if len(items) == 1:
+        return items[0]
+    return f"{', '.join(items[:-1])} or {items[-1]}"
 
 # Verbatim per UI_Design_Spec.md §6.6 — this is exact required copy, not paraphrased.
 _GLOVE_DISCLOSURE_TEXT = (
@@ -78,15 +87,19 @@ def _hazard_identity_text(canonical_name: str, ghs: GHSInfo) -> str:
 
 
 def _precautionary_text(canonical_name: str, codes: list[str]) -> str:
-    return f"Precautionary statements for {canonical_name} (P-codes): {', '.join(codes)}."
+    # A bare P-code ("P210") is not guidance to a newcomer — resolve it against the
+    # static GHS table where we have it; an unresolved code falls back to the bare
+    # code itself rather than inventing text (honest omission, see
+    # app/precautionary_codes.py).
+    parts = []
+    for code in codes:
+        resolved = resolve_precautionary_code(code)
+        parts.append(f"{code} — {resolved}" if resolved else code)
+    return f"Precautionary statements for {canonical_name}: " + " ".join(parts)
 
 
-def _safety_note_text(canonical_name: str, kind: str, note_text: str) -> str:
-    # PubChem's get_safety_note joins multiple source snippets with " | " — split
-    # those back out into clearly delimited sentences rather than rendering the
-    # raw pipe-joined blob.
-    clauses = [_sentence(part) for part in note_text.split(" | ") if part.strip()]
-    body = " ".join(clauses)
+def _safety_note_text(canonical_name: str, kind: str, excerpt_text: str) -> str:
+    body = _sentence(excerpt_text)
     label = {
         "ppe": f"PPE for {canonical_name}",
         "first_aid": f"First aid if exposed to {canonical_name}",
@@ -144,6 +157,9 @@ def _chemical_statements(chemical: Chemical, profile: ChemicalHazardProfile) -> 
                 source_ref=cid_ref,
                 source_url=profile.ghs.source.url,
                 chemical_ids=[chemical.id],
+                signal_word=profile.ghs.signal_word,
+                pictogram_urls=profile.ghs.pictogram_urls,
+                pictogram_labels=profile.ghs.pictograms,
             )
         )
         if profile.ghs.precautionary_statements:
@@ -161,25 +177,32 @@ def _chemical_statements(chemical: Chemical, profile: ChemicalHazardProfile) -> 
         kind = _SAFETY_NOTE_KIND.get(note.heading)
         if kind is None:
             continue
-        statements.append(
-            BriefStatement(
-                text=_safety_note_text(chemical.canonical_name, kind, note.text),
-                kind=kind,  # type: ignore[arg-type]
-                source_ref=cid_ref,
-                source_url=note.source.url,
-                chemical_ids=[chemical.id],
+        # One statement per excerpt, not per heading — a heading can cite more than
+        # one authority (e.g. both NIOSH and ERG under PPE), and collapsing them into
+        # one blob is exactly the "per-chemical wall" problem §20 exists to fix.
+        for excerpt in note.excerpts:
+            statements.append(
+                BriefStatement(
+                    text=_safety_note_text(chemical.canonical_name, kind, excerpt.text),
+                    kind=kind,  # type: ignore[arg-type]
+                    source_ref=cid_ref,
+                    source_url=excerpt.source.url,
+                    chemical_ids=[chemical.id],
+                    audience=excerpt.audience,
+                    source_label=excerpt.source_label,
+                )
             )
-        )
 
-    for heading in profile.missing_sections:
-        label = _MISSING_SECTION_LABEL.get(heading)
-        if label is None:
-            continue
+    # One aggregated gap card per chemical, not one per missing heading — surfacing the
+    # gap is the honest-omission rule; flooding the brief with five near-identical cards
+    # per chemical (water, nitrogen, and PBS each had all five) is not (item 3).
+    short_labels = [_MISSING_SECTION_SHORT_LABEL[h] for h in profile.missing_sections if h in _MISSING_SECTION_SHORT_LABEL]
+    if short_labels:
         statements.append(
             BriefStatement(
                 text=(
-                    f"No {label} was found in PubChem for {chemical.canonical_name}. "
-                    "Do not assume none applies — consult its SDS directly."
+                    f"{chemical.canonical_name} — no {_join_with_or(short_labels)} data in PubChem. "
+                    "This does not mean it is hazard-free — consult its SDS directly."
                 ),
                 kind="no_data",
                 source_ref=cid_ref,
@@ -192,14 +215,36 @@ def _chemical_statements(chemical: Chemical, profile: ChemicalHazardProfile) -> 
 
 
 def _cameo_react_label(url: str | None) -> str | None:
-    """https://cameochemicals.noaa.gov/react/44 -> "NOAA CAMEO react/44" — a short,
-    chip-ready label derived mechanically from the URL path, not free-text parsing."""
+    """https://cameochemicals.noaa.gov/reactivity/documentation/RG44-RG2 -> "NOAA CAMEO
+    documentation/RG44-RG2" — a short, chip-ready label derived mechanically from the URL
+    path, not free-text parsing."""
     if not url:
         return None
     parts = url.rstrip("/").split("/")
     if len(parts) < 2:
         return None
     return f"NOAA CAMEO {parts[-2]}/{parts[-1]}"
+
+
+def _origin_phrase(name: str, origin: str, added_step: int | None) -> str:
+    if origin == "added":
+        return f"{name} (added in step {added_step})" if added_step else f"{name} (added)"
+    verb = "carried over" if origin == "carried_over" else "residual"
+    return f"{name} ({verb} from step {added_step})" if added_step else f"{name} ({verb})"
+
+
+def _lead_in(finding: ChemicalPairFinding) -> str:
+    """The authored, deterministic framing line — never concatenated with the CAMEO
+    quote (see app/interaction_matrix.py's 2026-07-10 audit note). "Combined" only when
+    both chemicals were freshly added at this step; otherwise names each chemical's
+    origin, since a carryover meeting is a materially different claim from a same-step
+    mix (§3.3's trust-critical seam) and deserves to be said in the card, not just shown
+    in the thread graphic."""
+    if finding.origin_a == "added" and finding.origin_b == "added":
+        return f"Combining {finding.chemical_a_name} and {finding.chemical_b_name}."
+    a = _origin_phrase(finding.chemical_a_name, finding.origin_a, finding.added_step_a)
+    b = _origin_phrase(finding.chemical_b_name, finding.origin_b, finding.added_step_b)
+    return f"{a} meets {b}."
 
 
 def _interaction_statement(findings_for_pair: list[ChemicalPairFinding]) -> BriefStatement:
@@ -210,6 +255,11 @@ def _interaction_statement(findings_for_pair: list[ChemicalPairFinding]) -> Brie
     only which steps the pair co-occurred in varies. Collapsing them here (rather than in the
     UI) is what makes the carryover thread renderable correctly: four or five near-identical
     statements would read as four or five separate hazards when it's really one that persists.
+
+    The representative finding (findings_for_pair[0]) is the earliest step the pair was
+    co-present — find_step_interactions appends findings in step order — so its origin_a/
+    origin_b describe the pair's actual onset, which is what _lead_in and the "combined vs.
+    co-present" distinction need.
     """
     finding = findings_for_pair[0]  # representative — status/verdict/note identical across the group
     pair = (finding.chemical_a_id, finding.chemical_b_id)
@@ -221,10 +271,12 @@ def _interaction_statement(findings_for_pair: list[ChemicalPairFinding]) -> Brie
         assert verdict is not None  # status=hazard_found guarantees this (see app/interactions.py)
         source_ref = _cameo_react_label(verdict.source.url) or verdict.source.source_name
         return BriefStatement(
-            text=f"Combining {finding.chemical_a_name} and {finding.chemical_b_name} — {verdict.summary}",
+            text=verdict.quote,  # ONLY the CAMEO quote — this is what the chip attaches to
             kind="interaction_hazard",
             source_ref=source_ref,
             source_url=verdict.source.url,
+            lead_in=_lead_in(finding),
+            hazard_note=verdict.note,
             step_numbers=step_numbers,
             chemical_ids=chemical_ids,
             pair=pair,
@@ -232,10 +284,20 @@ def _interaction_statement(findings_for_pair: list[ChemicalPairFinding]) -> Brie
 
     # status in {"no_established_data", "insufficient_reactive_group_data"} — reuse the
     # finding's own note verbatim; it's already carefully worded for honest omission.
+    # A real CAMEO classification (e.g. "Not Chemically Reactive") gets cited to its own
+    # source rather than the generic interaction-table placeholder — it's a lookup, not
+    # an absence (§21).
+    if finding.classification_source is not None:
+        source_ref = finding.classification_source.source_name
+        source_url = finding.classification_source.url
+    else:
+        source_ref = "PreCaution interaction table"
+        source_url = None
     return BriefStatement(
         text=finding.note or "",
         kind="interaction_no_data",
-        source_ref="PreCaution interaction table",
+        source_ref=source_ref,
+        source_url=source_url,
         step_numbers=step_numbers,
         chemical_ids=chemical_ids,
         pair=pair,
@@ -255,6 +317,21 @@ def _step_context_statement(step: Step, all_chemical_ids: list[str]) -> BriefSta
         unverified=True,
         step_numbers=[step.number],
         chemical_ids=all_chemical_ids,
+    )
+
+
+def _unresolved_mention_statement(mention: str) -> BriefStatement:
+    """§16.2/§D: a chemical-looking phrase Stage 1 couldn't confidently resolve.
+    Never silently dropped — same honest-omission rule as a missing grounding
+    heading, just at the extraction layer instead of PubChem's."""
+    return BriefStatement(
+        text=(
+            f'"{mention}" could not be confidently resolved to a specific chemical. '
+            "Do not assume it is unimportant — check the original protocol text and consult its SDS if unsure."
+        ),
+        kind="unresolved_mention",
+        source_ref="Extraction (Stage 1) — Claude's read of the protocol text, not independently checked",
+        unverified=True,
     )
 
 
@@ -289,6 +366,9 @@ def build_brief(
             )
             continue
         statements.extend(_chemical_statements(chemical, profile))
+
+    for mention in result.unresolved_mentions:
+        statements.append(_unresolved_mention_statement(mention))
 
     for step in result.steps:
         step_chemical_ids = [ref.chemical_id for ref in step.chemicals_present]

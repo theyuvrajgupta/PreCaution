@@ -187,14 +187,31 @@ BriefKind = Literal[
     "limitation_disclosure",
     "no_data",
     "grounding_incomplete",
+    "unresolved_mention",
 ]
 
 
 class BriefStatement(BaseModel):
-    text: str = Field(description="The rendered statement text. Composed from a source field, never invented.")
+    text: str = Field(
+        description="The rendered statement text. For 'interaction_hazard', this is ONLY the CAMEO quote — "
+        "the exact text that renders under the source chip. Composed from a source field, never invented."
+    )
     kind: BriefKind
     source_ref: str = Field(description="Human-readable provenance. Always non-empty — this is the trust contract.")
     source_url: str | None = Field(default=None, description="Clickable link, when the source has one.")
+    lead_in: str | None = Field(
+        default=None,
+        description="Set only for 'interaction_hazard': the authored, deterministic framing line — which "
+        "chemicals, and (per app/interactions.py's origin data) whether they were combined directly or one "
+        "arrived by carryover. Renders ABOVE the quote, with no chip — never concatenated into `text`, so the "
+        "chipped block can never contain authored prose (see app/interaction_matrix.py's 2026-07-10 audit).",
+    )
+    hazard_note: str | None = Field(
+        default=None,
+        description="Set only for 'interaction_hazard', only when the matrix entry has one: an authored nominal "
+        "fact (e.g. a common name like 'piranha solution'), never a hazard claim. Renders as a separate line "
+        "below the quote, with no source chip.",
+    )
     unverified: bool = Field(
         default=False,
         description="True only for 'step_context': this came from extraction (Claude reading the protocol), "
@@ -212,6 +229,34 @@ class BriefStatement(BaseModel):
     )
     pair: tuple[str, str] | None = Field(
         default=None, description="(chemical_a_id, chemical_b_id) for interaction_* kinds."
+    )
+    audience: Literal["niosh", "erg", "other"] | None = Field(
+        default=None,
+        description="Set only for per-chemical safety-note kinds (ppe/first_aid/disposal/storage): which "
+        "authority this excerpt is from and who it's written for (see SafetyExcerpt). Drives §20's grouped "
+        "rendering — NIOSH open by default, ERG collapsed and labelled.",
+    )
+    source_label: str | None = Field(
+        default=None,
+        description="The specific citation this excerpt came from, e.g. 'NIOSH Pocket Guide for Sulfuric acid' "
+        "or 'ERG Guide 140 [Oxidizers]' — distinct from source_ref (the short chip identifier), used as the "
+        "group heading text in the UI.",
+    )
+    signal_word: str | None = Field(
+        default=None,
+        description="Set only for 'hazard_identity': GHSInfo.signal_word ('Danger' or 'Warning'), carried as a "
+        "structured field (not just embedded in text) so the UI can colour the per-chemical row and badge it "
+        "without re-parsing prose (UI_Design_Spec.md §4.6/§20.2).",
+    )
+    pictogram_urls: list[str] = Field(
+        default_factory=list,
+        description="Set only for 'hazard_identity': GHSInfo.pictogram_urls — real GHS SVGs from PubChem, "
+        "parallel to pictogram_labels. §6.3/§G: rendered as-is, 28px, never recoloured.",
+    )
+    pictogram_labels: list[str] = Field(
+        default_factory=list,
+        description="Parallel to pictogram_urls (GHSInfo.pictograms) — plain-English label per pictogram, "
+        "e.g. 'Corrosive', used as each SVG's alt text.",
     )
 
 
