@@ -308,7 +308,9 @@ function renderChemicalRow(record, brief, gloveState) {
 
   const nameEl = document.createElement("span");
   nameEl.className = "step-title";
-  nameEl.textContent = record.name;
+  // Concentration is captured at extraction and shown here so it isn't silently
+  // dropped — it never changes any hazard verdict (see README limitations).
+  nameEl.textContent = record.concentration ? `${record.name} (${record.concentration})` : record.name;
   summary.appendChild(nameEl);
   if (hazardIdentity && hazardIdentity.signal_word) {
     const badge = document.createElement("span");

@@ -45,7 +45,7 @@ const state = {
   protocolText: "",
   brief: null, // the final Brief, once we have one
   extractionDetail: null, // {chemicals, steps, mixtures, unresolved} counts from the stream
-  chemicalRecords: [], // [{name, cid, found, missing_sections, chemical_ids}, ...]
+  chemicalRecords: [], // [{name, cid, found, missing_sections, chemical_ids, concentration}, ...]
   lastError: null,
   // 'error' (extraction/network failure) | 'no_chemicals' (§16.2: not an error,
   // an explanation) — which flavor of the 'failed' state to render.

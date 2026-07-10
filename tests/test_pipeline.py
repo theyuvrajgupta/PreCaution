@@ -111,9 +111,14 @@ async def test_stream_pipeline_events_happy_path(monkeypatch):
     chemical_msgs = messages[2 : 2 + len(unique_names)]
     assert all(m.event == "chemical" for m in chemical_msgs)
     assert [m.data["name"] for m in chemical_msgs] == unique_names
+    by_name = {m.data["name"]: m.data for m in chemical_msgs}
     for m in chemical_msgs:
-        assert set(m.data.keys()) == {"name", "cid", "found", "missing_sections", "chemical_ids"}
+        assert set(m.data.keys()) == {"name", "cid", "found", "missing_sections", "chemical_ids", "concentration"}
         assert m.data["chemical_ids"]  # every extracted chemical maps back to at least one id
+    # Concentration round-trips onto the SSE event exactly as extraction captured it.
+    assert by_name["hydrogen peroxide"]["concentration"] == "30%"
+    assert by_name["sodium azide"]["concentration"] == "0.02%"
+    assert by_name["water"]["concentration"] is None
 
     rest = messages[2 + len(unique_names) :]
     assert rest[0].event == "stage" and rest[0].data["stage"] == "interactions"

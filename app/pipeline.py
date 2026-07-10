@@ -111,6 +111,10 @@ async def stream_pipeline_events(protocol_text: str) -> AsyncIterator[StreamMess
         # join this event back to BriefStatement.chemical_ids (which reference "c1" etc,
         # not canonical_name) without waiting for the final `result` event.
         chemical_ids = [c.id for c in result.chemicals if c.canonical_name == name]
+        # Extraction captures concentration per Chemical, keyed by canonical_name here like
+        # chemical_ids above — take the first mention's value. Shown in the UI, never read by
+        # any hazard logic (see README limitations: no concentration-threshold data is grounded).
+        concentration = next((c.concentration for c in result.chemicals if c.canonical_name == name), None)
         yield StreamMessage(
             event="chemical",
             data={
@@ -119,6 +123,7 @@ async def stream_pipeline_events(protocol_text: str) -> AsyncIterator[StreamMess
                 "found": profile.found,
                 "missing_sections": profile.missing_sections,
                 "chemical_ids": chemical_ids,
+                "concentration": concentration,
             },
         )
         if profile.grounding_error is not None:
