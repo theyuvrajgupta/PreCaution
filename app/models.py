@@ -114,12 +114,34 @@ class ReactiveGroupEntry(BaseModel):
     source: SourceRef = Field(description="Points back to the specific CAMEO Chemicals datasheet.")
 
 
-class SafetyNote(BaseModel):
-    """A free-text safety subsection: PPE, First Aid, Disposal, Storage, etc."""
+class SafetyExcerpt(BaseModel):
+    """One source-attributed chunk of a SafetyNote heading's text — e.g. one
+    excerpt from the NIOSH Pocket Guide, one from an ERG Guide. PubChem often
+    cites more than one authority under a single heading; kept separate (not
+    flattened into one joined string) so the UI can group and label them by
+    audience — NIOSH is occupational guidance, ERG is written for hazmat
+    first responders at a transport incident (UI_Design_Spec.md §20)."""
 
-    heading: str
+    source_label: str = Field(
+        description="The citation as PubChem states it, e.g. 'NIOSH Pocket Guide for Sulfuric acid' or "
+        "'ERG Guide 140 [Oxidizers]', parsed from an inline 'Excerpt from X:' marker in the source text. "
+        "Falls back to the reference's own SourceName (e.g. 'Hazardous Substances Data Bank (HSDB)') when "
+        "no such marker is present."
+    )
+    audience: Literal["niosh", "erg", "other"] = Field(
+        description="Coarse bucket derived deterministically from source_label, driving §20's grouped "
+        "rendering: NIOSH open by default, ERG collapsed and labelled, other shown as-is."
+    )
     text: str
     source: SourceRef
+
+
+class SafetyNote(BaseModel):
+    """A free-text safety subsection: PPE, First Aid, Disposal, Storage, etc. —
+    one or more source-attributed excerpts (see SafetyExcerpt)."""
+
+    heading: str
+    excerpts: list[SafetyExcerpt] = Field(default_factory=list)
 
 
 class ChemicalHazardProfile(BaseModel):

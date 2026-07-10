@@ -78,6 +78,96 @@ def test_missing_heading_returns_none(monkeypatch):
     assert pubchem.get_safety_note(1, "First Aid Measures") is None
 
 
+def test_fix_mojibake_reverses_double_encoded_bullet():
+    # Confirmed live 2026-07-10: PubChem's own response bytes for a bullet character
+    # are C3 A2 C2 80 C2 A2 — correctly UTF-8-decoding that (which httpx already does)
+    # yields exactly this 3-codepoint string, not the intended "•" (U+2022).
+    corrupted = "â¢ EYEWASH"
+    assert pubchem._fix_mojibake(corrupted) == "• EYEWASH"
+
+
+def test_fix_mojibake_leaves_clean_text_untouched():
+    clean = "Wear appropriate personal protective clothing to prevent skin contact."
+    assert pubchem._fix_mojibake(clean) == clean
+
+
+def test_safety_note_dedupes_exact_repeated_excerpts(monkeypatch):
+    # Reproduces the real bug: PubChem cites the same excerpt under two different
+    # ReferenceNumbers (confirmed live for hydrogen peroxide's PPE heading).
+    fixture = {
+        "Record": {
+            "Reference": [
+                {"ReferenceNumber": 6, "SourceName": "NIOSH Pocket Guide", "URL": "https://example.invalid/niosh"},
+                {"ReferenceNumber": 7, "SourceName": "NIOSH Pocket Guide", "URL": "https://example.invalid/niosh"},
+            ],
+            "Section": [
+                {
+                    "TOCHeading": "Personal Protective Equipment (PPE)",
+                    "Information": [
+                        {"ReferenceNumber": 6, "Value": {"StringWithMarkup": [{"String": "Wear gloves."}]}},
+                        {"ReferenceNumber": 7, "Value": {"StringWithMarkup": [{"String": "Wear gloves."}]}},
+                    ],
+                }
+            ],
+        }
+    }
+    monkeypatch.setattr(pubchem, "_fetch_heading", lambda cid, heading: fixture)
+
+    note = pubchem.get_safety_note(1, "Personal Protective Equipment (PPE)")
+
+    assert note is not None
+    assert len(note.excerpts) == 1  # refs 6 and 7 merge into one NIOSH group
+    assert note.excerpts[0].text.count("Wear gloves.") == 1
+
+
+def test_safety_note_groups_by_source_with_audience_labels(monkeypatch):
+    # Reproduces the real shape confirmed live for sulfuric acid's PPE heading:
+    # a "Excerpt from X:" marker names the true authority (NIOSH here rehosted
+    # under CAMEO's own ReferenceNumber), and a separate, unlabelled reference
+    # (HSDB) contributes text with no such marker.
+    fixture = {
+        "Record": {
+            "Reference": [
+                {"ReferenceNumber": 6, "SourceName": "CAMEO Chemicals", "URL": "https://example.invalid/cameo"},
+                {"ReferenceNumber": 53, "SourceName": "Hazardous Substances Data Bank (HSDB)", "URL": "https://example.invalid/hsdb"},
+            ],
+            "Section": [
+                {
+                    "TOCHeading": "Personal Protective Equipment (PPE)",
+                    "Information": [
+                        {
+                            "ReferenceNumber": 6,
+                            "Value": {
+                                "StringWithMarkup": [
+                                    {"String": "Excerpt from NIOSH Pocket Guide for Sulfuric acid:"},
+                                    {"String": "Skin: PREVENT SKIN CONTACT."},
+                                ]
+                            },
+                        },
+                        {
+                            "ReferenceNumber": 53,
+                            "Value": {"StringWithMarkup": [{"String": "Eye/face protection: Tightly fitting goggles."}]},
+                        },
+                    ],
+                }
+            ],
+        }
+    }
+    monkeypatch.setattr(pubchem, "_fetch_heading", lambda cid, heading: fixture)
+
+    note = pubchem.get_safety_note(1, "Personal Protective Equipment (PPE)")
+
+    assert note is not None
+    assert len(note.excerpts) == 2
+    niosh = next(e for e in note.excerpts if e.audience == "niosh")
+    other = next(e for e in note.excerpts if e.audience == "other")
+    assert niosh.source_label == "NIOSH Pocket Guide for Sulfuric acid"
+    assert "Skin: PREVENT SKIN CONTACT." in niosh.text
+    assert "Excerpt from" not in niosh.text  # the marker line itself is stripped, not rendered as body text
+    assert other.source_label == "Hazardous Substances Data Bank (HSDB)"  # falls back to the reference's SourceName
+    assert "goggles" in other.text
+
+
 def test_get_json_retries_on_transient_error_then_succeeds(monkeypatch, tmp_path):
     monkeypatch.setattr(pubchem._cache, "CACHE_DIR", tmp_path)
     monkeypatch.setattr(pubchem, "_throttle", lambda: None)  # skip real sleeps in the test
@@ -87,12 +177,10 @@ def test_get_json_retries_on_transient_error_then_succeeds(monkeypatch, tmp_path
 
     class _FakeResponse:
         status_code = 200
+        content = b'{"ok": true}'
 
         def raise_for_status(self):
             pass
-
-        def json(self):
-            return {"ok": True}
 
     def _flaky_get(url, params=None, timeout=None):
         calls["n"] += 1
