@@ -332,15 +332,17 @@ def test_piranha_interaction_hazard_statement_present():
 
 def test_interaction_hazard_chip_text_is_exactly_the_quote():
     """The item-1 audit fix, locked in as a test: the chipped block (BriefStatement.text)
-    must be composed ENTIRELY from InteractionVerdict.quote — never concatenated with
-    authored prose like "Combining X and Y" or a note. That authored framing lives in
-    `lead_in` / `hazard_note` instead, both rendered separately with no chip. This is what
-    makes it structurally impossible (not just a wording convention) to reintroduce the
-    bug where an authored sentence rendered under a government-source citation chip.
+    must be composed ENTIRELY from InteractionVerdict.categories (plus .example, only
+    when every example_chemicals name is present in the protocol) — never concatenated
+    with authored prose like "Combining X and Y" or a note. That authored framing lives
+    in `lead_in` / `hazard_note` instead, both rendered separately with no chip. This is
+    what makes it structurally impossible (not just a wording convention) to reintroduce
+    the bug where an authored sentence rendered under a government-source citation chip.
     """
     result = _demo_extraction_result()
     profiles = _fully_grounded_demo_profiles()
     findings = find_step_interactions(result, profiles)
+    protocol_names = {c.canonical_name for c in result.chemicals}
 
     brief = build_brief(result, profiles, findings)
 
@@ -350,13 +352,42 @@ def test_interaction_hazard_chip_text_is_exactly_the_quote():
         pair_findings = [f for f in findings if {f.chemical_a_id, f.chemical_b_id} == set(statement.pair)]
         verdict = pair_findings[0].verdict
         assert verdict is not None
-        assert statement.text == verdict.quote
+        if verdict.example and verdict.example_chemicals and all(n in protocol_names for n in verdict.example_chemicals):
+            expected = f"{verdict.categories} {verdict.example}"
+        else:
+            expected = verdict.categories
+        assert statement.text == expected
         # No word from lead_in/hazard_note may appear in text unless it's already in the
         # quote itself — guards against a future edit re-merging the fields.
         if statement.lead_in:
             assert statement.lead_in not in statement.text
         if statement.hazard_note:
             assert statement.hazard_note not in statement.text
+
+
+def test_interaction_example_never_ships_for_a_chemical_it_doesnt_name():
+    """2026-07-10 follow-up to the item-1 audit: a documented example must never render
+    under a pair's chip unless every chemical it names is actually in the protocol.
+    Regression-tests the exact failure mode reported: RG44-RG2's only documented
+    example names metal chlorates, not hydrogen peroxide — the pair this demo protocol
+    actually resolves to.
+    """
+    result = _demo_extraction_result()
+    profiles = _fully_grounded_demo_profiles()
+    findings = find_step_interactions(result, profiles)
+
+    brief = build_brief(result, profiles, findings)
+
+    peroxide_acid = next(
+        s for s in brief.statements if s.kind == "interaction_hazard" and set(s.pair) == {"c1", "c2"}
+    )
+    assert "chlorate" not in peroxide_acid.text.lower()
+    assert "ClO2" not in peroxide_acid.text
+
+    azide_acid = next(
+        s for s in brief.statements if s.kind == "interaction_hazard" and set(s.pair) == {"c2", "c3"}
+    )
+    assert "NaN3" in azide_acid.text  # sodium azide + sulfuric acid ARE both in this protocol
 
 
 def test_interaction_no_data_is_surfaced():

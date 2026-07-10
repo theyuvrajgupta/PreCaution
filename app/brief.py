@@ -19,6 +19,7 @@ source field. That line is what keeps the "never introduce a claim" rule
 (Build_Spec.md §4.3) intact under a rewrite.
 """
 
+from app.interaction_matrix import InteractionVerdict
 from app.interactions import ChemicalPairFinding
 from app.models import (
     Brief,
@@ -226,28 +227,62 @@ def _cameo_react_label(url: str | None) -> str | None:
     return f"NOAA CAMEO {parts[-2]}/{parts[-1]}"
 
 
-def _origin_phrase(name: str, origin: str, added_step: int | None) -> str:
+def _origin_phrase(name: str, origin: str, added_step: int | None, vessel_entry_step: int | None, vessel: str | None) -> str:
     if origin == "added":
         return f"{name} (added in step {added_step})" if added_step else f"{name} (added)"
+    # A carried-over/residual chemical can have TWO distinct facts: when it was first
+    # added to the protocol, and when it entered the vessel this finding is actually
+    # about — these can differ (added in a beaker in step 1, poured into a waste
+    # carboy in step 4), and naming only the origin step implies false continuity in
+    # one container (2026-07-10 item-3 follow-up). Name both when they differ and
+    # we have real vessel data for it; otherwise fall back to whichever single step
+    # is known.
+    if added_step and vessel_entry_step and vessel_entry_step != added_step:
+        where = f"entered the {vessel}" if vessel else "entered this vessel"
+        return f"{name} (added in step {added_step}, {where} in step {vessel_entry_step})"
+    step = added_step or vessel_entry_step
     verb = "carried over" if origin == "carried_over" else "residual"
-    return f"{name} ({verb} from step {added_step})" if added_step else f"{name} ({verb})"
+    return f"{name} ({verb} from step {step})" if step else f"{name} ({verb})"
 
 
-def _lead_in(finding: ChemicalPairFinding) -> str:
+def _lead_in(finding: ChemicalPairFinding, step_numbers: list[int]) -> str:
     """The authored, deterministic framing line — never concatenated with the CAMEO
-    quote (see app/interaction_matrix.py's 2026-07-10 audit note). "Combined" only when
-    both chemicals were freshly added at this step; otherwise names each chemical's
-    origin, since a carryover meeting is a materially different claim from a same-step
-    mix (§3.3's trust-critical seam) and deserves to be said in the card, not just shown
-    in the thread graphic."""
+    quote (see app/interaction_matrix.py's 2026-07-10 audit note). "Combined" only for
+    the step both chemicals were freshly added; if the pair then stays co-present
+    across later steps, say so explicitly rather than implying the hazard was a single
+    instant (2026-07-10 item-2 follow-up). Otherwise names each chemical's origin,
+    since a carryover meeting is a materially different claim from a same-step mix
+    (§3.3's trust-critical seam) and deserves to be said in the card, not just shown in
+    the thread graphic."""
     if finding.origin_a == "added" and finding.origin_b == "added":
+        if len(step_numbers) > 1:
+            return (
+                f"{finding.chemical_a_name} and {finding.chemical_b_name}, combined in step "
+                f"{finding.step_number}, co-present through step {step_numbers[-1]}."
+            )
         return f"Combining {finding.chemical_a_name} and {finding.chemical_b_name}."
-    a = _origin_phrase(finding.chemical_a_name, finding.origin_a, finding.added_step_a)
-    b = _origin_phrase(finding.chemical_b_name, finding.origin_b, finding.added_step_b)
+    a = _origin_phrase(finding.chemical_a_name, finding.origin_a, finding.added_step_a, finding.vessel_entry_step_a, finding.vessel)
+    b = _origin_phrase(finding.chemical_b_name, finding.origin_b, finding.added_step_b, finding.vessel_entry_step_b, finding.vessel)
     return f"{a} meets {b}."
 
 
-def _interaction_statement(findings_for_pair: list[ChemicalPairFinding]) -> BriefStatement:
+def _render_quote(verdict: InteractionVerdict, protocol_chemical_names: set[str]) -> str:
+    """The chipped hazard-card body: always the group-level `categories`, plus CAMEO's
+    documented `example` ONLY when every chemical it names is actually present in this
+    protocol (2026-07-10 item-1 follow-up). A real, correctly-cited CAMEO example can
+    still mislead if it happens to document a *different* member of the same reactive
+    group than the one in front of the reader — e.g. a metal-chlorate example under a
+    hydrogen-peroxide finding. Deterministic, no model call."""
+    if verdict.example and verdict.example_chemicals and all(
+        name in protocol_chemical_names for name in verdict.example_chemicals
+    ):
+        return f"{verdict.categories} {verdict.example}"
+    return verdict.categories
+
+
+def _interaction_statement(
+    findings_for_pair: list[ChemicalPairFinding], protocol_chemical_names: set[str]
+) -> BriefStatement:
     """One statement per unique chemical pair, not one per (pair, step) occurrence.
 
     `status`/`verdict`/`note` depend only on the pair's reactive groups (step-independent —
@@ -271,11 +306,11 @@ def _interaction_statement(findings_for_pair: list[ChemicalPairFinding]) -> Brie
         assert verdict is not None  # status=hazard_found guarantees this (see app/interactions.py)
         source_ref = _cameo_react_label(verdict.source.url) or verdict.source.source_name
         return BriefStatement(
-            text=verdict.quote,  # ONLY the CAMEO quote — this is what the chip attaches to
+            text=_render_quote(verdict, protocol_chemical_names),  # ONLY CAMEO text — this is what the chip attaches to
             kind="interaction_hazard",
             source_ref=source_ref,
             source_url=verdict.source.url,
-            lead_in=_lead_in(finding),
+            lead_in=_lead_in(finding, step_numbers),
             hazard_note=verdict.note,
             step_numbers=step_numbers,
             chemical_ids=chemical_ids,
@@ -376,12 +411,13 @@ def build_brief(
 
     # Group findings by unique chemical pair before rendering — one statement per pair,
     # not one per (pair, step) occurrence. Preserves first-seen (i.e. earliest-step) order.
+    protocol_chemical_names = {c.canonical_name for c in result.chemicals}
     pair_groups: dict[frozenset[str], list[ChemicalPairFinding]] = {}
     for finding in findings:
         key = frozenset((finding.chemical_a_id, finding.chemical_b_id))
         pair_groups.setdefault(key, []).append(finding)
     for group in pair_groups.values():
-        statements.append(_interaction_statement(group))
+        statements.append(_interaction_statement(group, protocol_chemical_names))
 
     # Exactly one, always — independent of whether any PPE data was found. See
     # Build_Spec.md §4.4: the least groundable claim in this whole layer is a
