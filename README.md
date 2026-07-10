@@ -48,6 +48,7 @@ more honest choice than pretending the data fits perfectly.
 2. **Glove material can't be grounded per compound.** PubChem's PPE guidance is general; OSHA warns published glove breakthrough-time data can understate real breakthrough. The brief discloses this limit rather than guessing a specific glove material.
 3. **The interaction matrix is pairwise.** NOAA's own CAMEO documentation notes pairwise prediction can't anticipate how three or more substances react together — and the demo protocol's step 5 carboy has three (spent piranha + sodium azide waste). The two verdicts the brief gives for that step are each individually sourced and correct; the method has a documented blind spot at exactly that moment.
 4. **PreCaution only knows what *this protocol* puts into a vessel.** It has no way to know what a shared waste container already held before this procedure started.
+5. **Reactive-group abstraction is what makes this tool work — and its own blind spot.** A handful of table entries covers thousands of chemicals because CAMEO reasons about *classes*, not individual compounds. That's also why a class's documented example reaction may involve a chemical you never used — CAMEO publishes one or two worked examples per group pair, not one per member. PreCaution quotes a group's documented example only when that example names a chemical actually in your protocol; where it doesn't, you get the group-level hazard prediction and nothing more.
 
 ## Testing
 
@@ -58,7 +59,7 @@ pytest tests/test_pubchem.py             # one file
 pytest tests/test_pubchem.py::test_parse_ghs_classification_offline   # one test
 ```
 
-48 tests passed, 3 deselected (`costly`) as of the last full run. `tests/test_brief.py::test_every_brief_statement_has_resolvable_source_ref` is what makes "every claim is sourced" a passing test, not just a README assertion — it fails the build if any statement in the brief is missing a `source_ref`, and grounded statement kinds must also carry a `source_url`.
+55 tests passed, 3 deselected (`costly`) as of the last full run. `tests/test_brief.py::test_every_brief_statement_has_resolvable_source_ref` is what makes "every claim is sourced" a passing test, not just a README assertion — it fails the build if any statement in the brief is missing a `source_ref`, and grounded statement kinds must also carry a `source_url`.
 
 ## Running it
 
