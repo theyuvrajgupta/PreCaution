@@ -75,7 +75,15 @@ def _sentence(text: str) -> str:
     return text + "."
 
 
-def _hazard_identity_text(canonical_name: str, ghs: GHSInfo) -> str:
+def _named(name: str, concentration: str | None) -> str:
+    """A chemical's name with its extracted concentration parenthesized when known —
+    e.g. "sodium azide (0.02%)". Concentration is captured at extraction and shown here
+    so it's not silently dropped, but it is NEVER used to change any hazard verdict —
+    the interaction matrix has no concentration thresholds (see README limitations)."""
+    return f"{name} ({concentration})" if concentration else name
+
+
+def _hazard_identity_text(canonical_name: str, ghs: GHSInfo, concentration: str | None) -> str:
     parts: list[str] = []
     if ghs.signal_word:
         parts.append(f'Signal word "{ghs.signal_word}".')
@@ -84,7 +92,7 @@ def _hazard_identity_text(canonical_name: str, ghs: GHSInfo) -> str:
     if ghs.hazard_statements:
         parts.append(" ".join(_sentence(h) for h in ghs.hazard_statements))
     body = " ".join(parts) if parts else "No further hazard detail on file."
-    return f"{canonical_name}: {body}"
+    return f"{_named(canonical_name, concentration)}: {body}"
 
 
 def _precautionary_text(canonical_name: str, codes: list[str]) -> str:
@@ -153,7 +161,7 @@ def _chemical_statements(chemical: Chemical, profile: ChemicalHazardProfile) -> 
     if profile.ghs is not None:
         statements.append(
             BriefStatement(
-                text=_hazard_identity_text(chemical.canonical_name, profile.ghs),
+                text=_hazard_identity_text(chemical.canonical_name, profile.ghs, chemical.concentration),
                 kind="hazard_identity",
                 source_ref=cid_ref,
                 source_url=profile.ghs.source.url,
@@ -227,22 +235,35 @@ def _cameo_react_label(url: str | None) -> str | None:
     return f"NOAA CAMEO {parts[-2]}/{parts[-1]}"
 
 
-def _origin_phrase(name: str, origin: str, added_step: int | None, vessel_entry_step: int | None, vessel: str | None) -> str:
+def _origin_phrase(
+    name: str,
+    origin: str,
+    added_step: int | None,
+    vessel_entry_step: int | None,
+    vessel: str | None,
+    concentration: str | None,
+) -> str:
+    # Concentration, when known, leads the parenthetical — one combined clause rather
+    # than a second nested "(...)" — followed by whichever origin facts apply.
+    clauses: list[str] = [concentration] if concentration else []
     if origin == "added":
-        return f"{name} (added in step {added_step})" if added_step else f"{name} (added)"
-    # A carried-over/residual chemical can have TWO distinct facts: when it was first
-    # added to the protocol, and when it entered the vessel this finding is actually
-    # about — these can differ (added in a beaker in step 1, poured into a waste
-    # carboy in step 4), and naming only the origin step implies false continuity in
-    # one container (2026-07-10 item-3 follow-up). Name both when they differ and
-    # we have real vessel data for it; otherwise fall back to whichever single step
-    # is known.
+        clauses.append(f"added in step {added_step}" if added_step else "added")
+        return f"{name} ({', '.join(clauses)})"
+    # A carried-over/residual chemical can have TWO distinct origin facts: when it was
+    # first added to the protocol, and when it entered the vessel this finding is
+    # actually about — these can differ (added in a beaker in step 1, poured into a
+    # waste carboy in step 4), and naming only the origin step implies false continuity
+    # in one container (2026-07-10 item-3 follow-up). Name both when they differ and we
+    # have real vessel data for it; otherwise fall back to whichever single step is known.
     if added_step and vessel_entry_step and vessel_entry_step != added_step:
         where = f"entered the {vessel}" if vessel else "entered this vessel"
-        return f"{name} (added in step {added_step}, {where} in step {vessel_entry_step})"
+        clauses.append(f"added in step {added_step}")
+        clauses.append(f"{where} in step {vessel_entry_step}")
+        return f"{name} ({', '.join(clauses)})"
     step = added_step or vessel_entry_step
     verb = "carried over" if origin == "carried_over" else "residual"
-    return f"{name} ({verb} from step {step})" if step else f"{name} ({verb})"
+    clauses.append(f"{verb} from step {step}" if step else verb)
+    return f"{name} ({', '.join(clauses)})"
 
 
 def _lead_in(finding: ChemicalPairFinding, step_numbers: list[int]) -> str:
@@ -255,14 +276,22 @@ def _lead_in(finding: ChemicalPairFinding, step_numbers: list[int]) -> str:
     (§3.3's trust-critical seam) and deserves to be said in the card, not just shown in
     the thread graphic."""
     if finding.origin_a == "added" and finding.origin_b == "added":
+        a_name = _named(finding.chemical_a_name, finding.concentration_a)
+        b_name = _named(finding.chemical_b_name, finding.concentration_b)
         if len(step_numbers) > 1:
             return (
-                f"{finding.chemical_a_name} and {finding.chemical_b_name}, combined in step "
+                f"{a_name} and {b_name}, combined in step "
                 f"{finding.step_number}, co-present through step {step_numbers[-1]}."
             )
-        return f"Combining {finding.chemical_a_name} and {finding.chemical_b_name}."
-    a = _origin_phrase(finding.chemical_a_name, finding.origin_a, finding.added_step_a, finding.vessel_entry_step_a, finding.vessel)
-    b = _origin_phrase(finding.chemical_b_name, finding.origin_b, finding.added_step_b, finding.vessel_entry_step_b, finding.vessel)
+        return f"Combining {a_name} and {b_name}."
+    a = _origin_phrase(
+        finding.chemical_a_name, finding.origin_a, finding.added_step_a, finding.vessel_entry_step_a,
+        finding.vessel, finding.concentration_a,
+    )
+    b = _origin_phrase(
+        finding.chemical_b_name, finding.origin_b, finding.added_step_b, finding.vessel_entry_step_b,
+        finding.vessel, finding.concentration_b,
+    )
     return f"{a} meets {b}."
 
 

@@ -330,6 +330,54 @@ def test_piranha_interaction_hazard_statement_present():
     assert "Step 1:" not in hazard[0].text  # step number lives in step_numbers, not baked into prose
 
 
+def test_interaction_lead_in_shows_concentration_when_known():
+    """2026-07-10: Chemical.concentration is extracted but was never read by any later
+    stage — the interaction lead-in is exactly where a reader needs it (a 0.02% trace
+    reads very differently from a bulk reagent). Shown, never used to change the
+    verdict itself: the hazard is flagged the same regardless of concentration."""
+    result = _demo_extraction_result()
+    profiles = _fully_grounded_demo_profiles()
+    findings = find_step_interactions(result, profiles)
+
+    brief = build_brief(result, profiles, findings)
+
+    peroxide_acid = next(
+        s for s in brief.statements if s.kind == "interaction_hazard" and set(s.pair) == {"c1", "c2"}
+    )
+    assert "hydrogen peroxide (30%)" in peroxide_acid.lead_in
+    assert "sulfuric acid (concentrated)" in peroxide_acid.lead_in
+
+    azide_acid = next(
+        s for s in brief.statements if s.kind == "interaction_hazard" and set(s.pair) == {"c2", "c3"}
+    )
+    # c3 = sodium azide has no concentration set in this scaffold — must omit cleanly,
+    # never render a stray "()".
+    assert "sodium azide ()" not in azide_acid.lead_in
+    assert "sodium azide (added in step 5)" in azide_acid.lead_in
+    # This scaffold only has steps 1 and 5 (no step 4 vessel-transition data), so the
+    # vessel-entry clause has nothing to attach to and origin falls back to a plain
+    # carried-over phrase — concentration still leads the parenthetical.
+    assert "sulfuric acid (concentrated, carried over from step 1)" in azide_acid.lead_in
+
+
+def test_hazard_identity_shows_concentration_when_known():
+    result = _demo_extraction_result()
+    profiles = _fully_grounded_demo_profiles()
+    findings = find_step_interactions(result, profiles)
+
+    brief = build_brief(result, profiles, findings)
+
+    peroxide_identity = next(
+        s for s in brief.statements if s.kind == "hazard_identity" and "c1" in s.chemical_ids
+    )
+    assert peroxide_identity.text.startswith("hydrogen peroxide (30%):")
+
+    azide_identity = next(
+        s for s in brief.statements if s.kind == "hazard_identity" and "c3" in s.chemical_ids
+    )
+    assert azide_identity.text.startswith("sodium azide:")  # no concentration set in this scaffold
+
+
 def test_interaction_hazard_chip_text_is_exactly_the_quote():
     """The item-1 audit fix, locked in as a test: the chipped block (BriefStatement.text)
     must be composed ENTIRELY from InteractionVerdict.categories (plus .example, only
