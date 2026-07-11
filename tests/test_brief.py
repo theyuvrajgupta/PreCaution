@@ -689,3 +689,61 @@ def test_repeated_pair_across_steps_collapses_to_one_statement():
     assert len(hazards) == 1, "one persisting hazard must be one statement, not one per step"
     assert hazards[0].step_numbers == [1, 2, 3]
     assert hazards[0].pair == ("c1", "c2")
+
+
+def test_sodium_hypochlorite_sulfuric_acid_interaction_hazard_fires():
+    """The new Salts, Basic x Acids, Strong Oxidizing matrix entry (2026-07-11), end-to-end:
+    sulfuric acid meeting sodium hypochlorite (bleach) in a shared waste carboy must produce
+    a real interaction_hazard statement, not a no-data gap.
+
+    Sodium hypochlorite's reactive_groups are listed in the exact order PubChem's live
+    Reactive Group heading actually returns them (confirmed live 2026-07-11: Salts, Basic
+    first, then Oxidizing Agents, Strong, then Water and Aqueous Solutions) — this matters
+    because it's ALSO classified Oxidizing Agents, Strong, which is the piranha-solution
+    pair's other half. _first_match takes whichever pairing it finds first when walking
+    each chemical's reactive_groups in order, so this test locks in that the real ordering
+    resolves to the new Salts, Basic entry, not a misattributed piranha-solution note."""
+    chemicals = [
+        Chemical(id="c1", as_written="sulfuric acid", canonical_name="sulfuric acid", resolution_reasoning="x"),
+        Chemical(id="c2", as_written="bleach", canonical_name="sodium hypochlorite", resolution_reasoning="x"),
+    ]
+    steps = [
+        Step(
+            number=1,
+            text="Pour the spent sulfuric acid decontamination solution into the carboy already holding bleach waste.",
+            chemicals_present=[
+                StepChemicalRef(chemical_id="c1", origin="added"),
+                StepChemicalRef(chemical_id="c2", origin="added"),
+            ],
+        )
+    ]
+    result = ExtractionResult(chemicals=chemicals, steps=steps)
+    cameo_source = SourceRef(source_name="CAMEO Chemicals", url="https://cameochemicals.noaa.gov/chemical/4503")
+    profiles = {
+        "sulfuric acid": _full_profile("sulfuric acid", 1118, "Acids, Strong Oxidizing"),
+        "sodium hypochlorite": ChemicalHazardProfile(
+            query_name="sodium hypochlorite",
+            found=True,
+            cid=23665760,
+            pubchem_url="https://pubchem.ncbi.nlm.nih.gov/compound/23665760",
+            reactive_groups=[
+                ReactiveGroupEntry(group_name="Salts, Basic", source=cameo_source),
+                ReactiveGroupEntry(group_name="Oxidizing Agents, Strong", source=cameo_source),
+                ReactiveGroupEntry(group_name="Water and Aqueous Solutions", source=cameo_source),
+            ],
+        ),
+    }
+    findings = find_step_interactions(result, profiles)
+    assert len(findings) == 1
+    assert findings[0].status == "hazard_found"
+
+    brief = build_brief(result, profiles, findings)
+
+    hazards = [s for s in brief.statements if s.kind == "interaction_hazard"]
+    assert len(hazards) == 1
+    hazard = hazards[0]
+    assert hazard.source_url == "https://cameochemicals.noaa.gov/reactivity/documentation/RG39-RG2"
+    assert hazard.source_ref == "NOAA CAMEO documentation/RG39-RG2"
+    assert "piranha" not in hazard.text.lower()
+    assert (hazard.hazard_note or "") == ""  # no note leaked from the piranha entry
+    assert "corrosive" in hazard.text.lower()

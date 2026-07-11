@@ -198,6 +198,31 @@ _add(
 )
 
 _add(
+    "Salts, Basic",
+    "Acids, Strong Oxidizing",
+    hazard_types=["corrosive", "toxic_gas", "heat"],
+    categories=(
+        "Corrosive: Reaction products may be corrosive. Generates gas: Reaction liberates gaseous products and "
+        "may cause pressurization. Generates heat: Exothermic reaction at ambient temperatures (releases heat). "
+        "Toxic: Reaction products may be toxic."
+    ),
+    # 2026-07-11: sodium hypochlorite (bleach) meeting sulfuric acid is a well-documented lab
+    # hazard (evolves chlorine gas) — but that specific sentence lives only on sodium
+    # hypochlorite's own per-chemical CAMEO datasheet (cameochemicals.noaa.gov/chemical/4503,
+    # "Can react with sulfuric acid to produce heat and chlorine gas"), not on this PAIRWISE
+    # reactivity-documentation page, which is the only source this table quotes from. RG39-RG2's
+    # own documented example names sodium carbonate, not sodium hypochlorite — same "right quote,
+    # wrong chemical" trap as RG44-RG2's chlorate example above — so it's left unset rather than
+    # quoted under this pair's chip. Sodium hypochlorite is classified "Salts, Basic" (and also
+    # "Oxidizing Agents, Strong", which is why it already collides with the piranha-solution pair
+    # above and cannot get a second, distinct entry there); this pair (Salts, Basic × Acids,
+    # Strong Oxidizing) is the one that actually fires for sulfuric acid + sodium hypochlorite
+    # without touching the existing piranha entry.
+    source_url="https://cameochemicals.noaa.gov/reactivity/documentation/RG39-RG2",
+    source_detail="Reactivity Documentation: Salts, Basic × Acids, Strong Oxidizing",
+)
+
+_add(
     "Azo, Diazo, Azido, Hydrazine, and Azide Compounds",
     "Acids, Strong Non-oxidizing",
     hazard_types=["explosion", "toxic_gas", "heat"],

@@ -24,6 +24,25 @@ def test_azide_acid_pair_found_and_sourced():
     assert verdict.source.url == "https://cameochemicals.noaa.gov/reactivity/documentation/RG8-RG2"
 
 
+def test_sodium_hypochlorite_sulfuric_acid_pair_found_and_sourced():
+    """Sodium hypochlorite is classified 'Salts, Basic' AND 'Oxidizing Agents, Strong' by
+    CAMEO (confirmed live via PubChem's Reactive Group heading, 2026-07-11) — the latter
+    already collides with the piranha-solution pair above, so this entry deliberately uses
+    the Salts, Basic pairing instead, which is real, distinct, and fires for sulfuric acid
+    + sodium hypochlorite without touching that existing entry."""
+    verdict = lookup_verdict("Salts, Basic", "Acids, Strong Oxidizing")
+    assert verdict is not None
+    assert "toxic_gas" in verdict.hazard_types
+    assert verdict.source.url == "https://cameochemicals.noaa.gov/reactivity/documentation/RG39-RG2"
+    # This pair must stay distinct from the piranha-solution entry — no "piranha" leakage,
+    # and the piranha entry's own pairing (Oxidizing Agents, Strong + Acids, Strong
+    # Oxidizing) must be untouched by this addition.
+    piranha = lookup_verdict("Oxidizing Agents, Strong", "Acids, Strong Oxidizing")
+    assert piranha is not None
+    assert piranha.source.url == "https://cameochemicals.noaa.gov/reactivity/documentation/RG44-RG2"
+    assert verdict.categories != piranha.categories
+
+
 def test_unknown_pair_returns_none_not_a_safety_claim():
     # A pair that is chemically plausible but not in our seed table.
     assert lookup_verdict("Alcohols and Glycols", "Water and Aqueous Solutions") is None
