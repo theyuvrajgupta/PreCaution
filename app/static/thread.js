@@ -155,19 +155,42 @@ function drawGutter(gutterEl, stepsEl, steps, onsetAt, hotSegments) {
 
   const byNumber = new Map(steps.map((s) => [s.number, s]));
 
+  // Mirrors app/interactions.py::_find_added_step exactly (same rule, same shape,
+  // ported rather than approximated): the EARLIEST step where this chemical's
+  // origin was "added" is its true point of introduction. A LATER step re-tagging
+  // it "added" — e.g. the spent piranha poured from the beaker into the waste
+  // carboy — is a vessel transition, not a second onset. Kept as a literal port
+  // so a future change to the Python rule has an obvious JS counterpart to update
+  // in lockstep, rather than two heuristics that happen to agree today.
+  const findEarliestAddedStep = (chemicalId) => {
+    for (const step of steps) {
+      if (step.chemicals.some((c) => c.chemical_id === chemicalId && c.origin === "added")) {
+        return step.number;
+      }
+    }
+    return null;
+  };
+
   // Base spine: only where a chemical genuinely carried forward — never implied
-  // continuity the data doesn't actually assert. "residual" counts as still
-  // present, same as "carried_over": app/interactions.py's co-presence check
-  // (which is what step_numbers on a hazard statement is built from) doesn't
-  // distinguish them either, so the thread must not draw a gap the hazard
-  // statement itself doesn't assert — that would visually contradict its own
-  // "Steps N-M" claim. Only "added" (a fresh token, not a continuation) is excluded.
+  // continuity the data doesn't actually assert. "residual"/"carried_over" both
+  // count, same as app/interactions.py's own co-presence check (which is what
+  // step_numbers on a hazard statement is built from — it has no vessel-name gate
+  // at all, so a pair keeps returning hazard_found straight through a transfer).
+  // A step that re-tags the chemical "added" ALSO counts, unless this is that
+  // chemical's true first onset per findEarliestAddedStep above — otherwise the
+  // thread draws a gap the hazard data doesn't assert (confirmed live: this used
+  // to break the spine at the step 3->4 vessel transfer on the locked demo, even
+  // though the piranha hazard's own step_numbers=[1,2,3,4,5] is fully contiguous).
   const carriesForward = (fromNum, toNum) => {
     const fromStep = byNumber.get(fromNum);
     const toStep = byNumber.get(toNum);
     if (!fromStep || !toStep) return false;
     const fromIds = new Set(fromStep.chemicals.map((c) => c.chemical_id));
-    return toStep.chemicals.some((c) => c.origin !== "added" && fromIds.has(c.chemical_id));
+    return toStep.chemicals.some((c) => {
+      if (!fromIds.has(c.chemical_id)) return false;
+      if (c.origin !== "added") return true;
+      return findEarliestAddedStep(c.chemical_id) !== toNum;
+    });
   };
 
   const sortedNums = [...centerByStep.keys()].sort((a, b) => a - b);
