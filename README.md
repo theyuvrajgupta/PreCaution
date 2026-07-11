@@ -140,9 +140,12 @@ generated" does and doesn't cover.
    written; the tests are regression locks on those entries, not a mechanism that evaluates
    new ones. The roadmap's agentic matrix extender proposes entries for human review for
    exactly this reason.
-10. **The matrix currently has three entries.** They cover the locked demo protocol's
-    reactive-group pairs. Paste a different protocol and most pairs will come back
-    `no_established_data` — surfaced honestly, never implied safe, but worth stating
+10. **The matrix currently has four entries.** Three cover the locked demo protocol's
+    reactive-group pairs (oxidizer × acid, two azide × acid pairs); a fourth
+    (basic salts × strong oxidizing acids, e.g. sulfuric acid meeting sodium hypochlorite
+    bleach) was added 2026-07-11, hand-authored from CAMEO's own pairwise documentation the
+    same way as the first three. Paste a different protocol and most pairs will still come
+    back `no_established_data` — surfaced honestly, never implied safe, but worth stating
     plainly: this is a seed set, not broad coverage.
 
 ## Testing
@@ -183,8 +186,10 @@ PubChem's own latency.
   datasheet, proposes an interaction-matrix entry with the source quote attached, and hands it to
   a human for review before it's added. Keeps the matrix's "fetched and quoted, not recalled" rule
   intact while it grows past the current hand-picked seed set — and is exactly the mechanism that
-  would grow the matrix past its current three entries, and eventually cover pairs beyond what a
-  strictly pairwise model can (limitations #7, #10).
+  would grow the matrix past its current four entries, and eventually cover pairs beyond what a
+  strictly pairwise model can (limitations #7, #10). A per-chemical alternative (PubChem's
+  "Safety and Hazards" incompatibility annotations, rather than CAMEO's reactive-group pairs)
+  was investigated 2026-07-11 and set aside — see `private/Build_Spec.md` §4.4 item 3.
 - **Byproduct grounding** — a reaction's byproduct (e.g. hydrazoic acid) has its own PubChem CID
   and could be grounded the same way its precursors are.
 - **Order-of-addition awareness** (limitation #3) — needs a Stage 1 schema and prompt addition
