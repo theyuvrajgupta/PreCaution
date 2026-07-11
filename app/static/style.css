@@ -132,16 +132,76 @@ button:disabled {
   font-size: var(--size-step-title);
 }
 
+/* --- Masthead (brand mark + wordmark) --------------------------------------
+   Not a hero section (§23 forbids that on the empty paper pane specifically —
+   this is persistent chrome across every state, no copy/CTA/imagery). Sits on
+   --field: a third, neutral tone distinct from both bench-dark and
+   paper-white, so it reads as the room containing both surfaces rather than
+   belonging to either one. */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  height: 56px;
+  padding: 0 2rem;
+  background: var(--field);
+  /* --muted-paper, not --line: --line is only WCAG-verified at 3:1 against
+     --sheet, and measures ~2.5:1 against --field — fails this project's own
+     non-text floor. --muted-paper clears it here (~4.7:1). */
+  border-bottom: 1px solid var(--muted-paper);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.55em;
+}
+
+/* The mark is the product's own onset-diamond glyph (.gutter-diamond) at logo
+   scale — assembled from a shape this tool already uses functionally (GHS
+   pictograms are diamonds too), not an imported generic logo. */
+.brand-mark {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  color: var(--danger);
+}
+
+.brand-mark polygon {
+  fill: currentColor;
+}
+
+.brand-word {
+  font-family: var(--font-signal);
+  font-size: 20px;
+  color: var(--ink);
+}
+
+/* "PreCaution" styled preCaution per the locked project naming — the weight
+   jump from "pre" to "Caution" visually enacts the compound word itself: the
+   caution that comes before. */
+.brand-word .pre {
+  font-weight: 700;
+}
+
+.brand-word .caution {
+  font-weight: 800;
+}
+
 /* --- App shell / two-pane layout (§7) ----------------------------------- */
 
 .app {
   display: flex;
-  min-height: calc(100vh - 3.5rem); /* leave room for the footer */
+  min-height: calc(100vh - 3.5rem - 56px); /* leave room for the footer + masthead */
 }
 
 @media (max-width: 900px) {
   .app {
     flex-direction: column;
+  }
+
+  .scan-layer .signal {
+    font-size: 24px;
   }
 }
 
@@ -219,17 +279,19 @@ button:disabled {
 
 .gutter-line {
   position: absolute;
-  left: 20px;
-  width: 2px;
+  left: 19px;
+  width: 3px;
   background: var(--ink-bench);
   opacity: 0.3;
 }
 
 /* --danger, not --danger-bench: the thread is a graphic (3:1 floor), not text
-   — spec §4.5 explicitly carves this out. */
+   — spec §4.5 explicitly carves this out. The signature element of the whole
+   app (the one asset no per-chemical checklist tool has) — sized to read as
+   such, not as a thin rule. */
 .gutter-line-hot {
-  left: 19px; /* keep centred as the bar widens 2px -> 3px */
-  width: 3px;
+  left: 18px; /* keep centred as the bar widens 3px -> 5px */
+  width: 5px;
   background: var(--danger);
   opacity: 1;
 }
@@ -259,9 +321,9 @@ button:disabled {
 
 .gutter-diamond {
   position: absolute;
-  left: 16px;
-  width: 9px;
-  height: 9px;
+  left: 14px;
+  width: 13px;
+  height: 13px;
   background: var(--danger);
   transform: translateY(-50%) rotate(45deg);
 }
@@ -379,11 +441,11 @@ button:disabled {
 
 .btn {
   font-family: var(--font-body);
-  font-weight: 600;
+  font-weight: 700;
   font-size: var(--size-body);
-  padding: 0.6em 1.1em;
+  padding: 0.7em 1.3em;
   border-radius: 2px;
-  border: 1px solid transparent;
+  border: 1.5px solid transparent;
 }
 
 .btn-primary {
@@ -516,10 +578,13 @@ button:disabled {
   margin-bottom: 2rem;
 }
 
+/* The scan-layer verdict (DANGER / NO ESTABLISHED INTERACTION HAZARDS) is this
+   page's actual thesis once a brief exists — give it a real headline size,
+   not a slightly-large label. */
 .scan-layer .signal {
   display: block;
-  font-size: 20px;
-  margin-bottom: 0.5em;
+  font-size: 30px;
+  margin-bottom: 0.3em;
 }
 
 .scan-line {
@@ -530,8 +595,12 @@ button:disabled {
 
 /* --- Cards: hazard (§6.4) / gap (§6.5) / glove notice (§6.6) -------------- */
 
+/* --sheet-sunk, not --sheet: a real depth cue (a second, slightly darker paper
+   layer sitting IN the sheet) without the banned drop-shadow/rounded-2xl combo
+   — the existing surface tokens just weren't being used assertively enough. */
 .card {
   position: relative;
+  background: var(--sheet-sunk);
   border-radius: 2px;
   border: 1px solid var(--line);
   padding: 1em 1em 1em 1.25em;
@@ -862,6 +931,11 @@ a.chip:focus-visible {
 @media print {
   body {
     background: white;
+  }
+
+  .app-header {
+    background: white;
+    border-bottom: 1px solid black;
   }
 
   .app {

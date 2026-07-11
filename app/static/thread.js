@@ -209,14 +209,17 @@ function drawGutter(gutterEl, stepsEl, steps, onsetAt, hotSegments) {
   }
 
   // Diamonds: hazard onset — one per pair that newly returns hazard_found, never
-  // one per step it persists through.
+  // one per step it persists through. Offsets sized for the 13px diamond (up from
+  // 9px — the thread is this app's signature element, sized to read as one): a
+  // rotated 13px square's diagonal is ~18.4px, so successive diamonds need at
+  // least that much vertical spacing to avoid overlapping (18/i step below).
   for (const [stepNum, hazardsHere] of onsetAt) {
     const center = centerByStep.get(stepNum);
     if (center === undefined) continue;
     hazardsHere.forEach((s, i) => {
       const diamond = document.createElement("div");
       diamond.className = "gutter-diamond";
-      diamond.style.top = `${center + 15 + i * 13}px`;
+      diamond.style.top = `${center + 18 + i * 19}px`;
       gutterEl.appendChild(diamond);
     });
   }

@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PreCaution</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link
     href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap"
     rel="stylesheet"
@@ -11,6 +12,15 @@
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
+  <header class="app-header">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+        <polygon points="16,2 30,16 16,30 2,16" />
+      </svg>
+      <span class="brand-word"><span class="pre">pre</span><span class="caution">Caution</span></span>
+    </div>
+  </header>
+
   <div class="app" id="app" data-state="empty">
     <section class="pane pane-bench" aria-label="Protocol">
       <div class="bench-content">
@@ -42,7 +52,7 @@
            own flat background — three light surfaces, not one. -->
       <div class="sheet">
         <div id="paper-empty" class="paper-panel paper-empty">
-          <p class="eyebrow">PRECAUTION</p>
+          <p class="eyebrow">SAFETY BRIEF</p>
           <p class="empty-copy">Paste a protocol. PreCaution reads the steps, not just the reagents.</p>
           <div class="scope-boundary">
             <p class="scope-line">
