@@ -120,6 +120,56 @@ def test_safety_note_dedupes_exact_repeated_excerpts(monkeypatch):
     assert note.excerpts[0].text.count("Wear gloves.") == 1
 
 
+def test_safety_note_dedupes_cross_label_repeated_excerpts(monkeypatch):
+    # Reproduces the real bug (confirmed live 2026-07-12): hydrogen peroxide's PPE
+    # heading cites the SAME excerpt verbatim under two entirely different labels —
+    # "ERG Guide 140 [Oxidizers]" and "ERG Guide 143 [Oxidizers (Unstable)]" — with two
+    # different CAMEO URLs (890 vs 19279). The per-(label, line) dedup inside the parse
+    # loop only catches a repeat WITHIN one label/ReferenceNumber; this is a second,
+    # later pass over the fully-built excerpt list that catches the same text appearing
+    # under a second, different label too.
+    fixture = {
+        "Record": {
+            "Reference": [
+                {"ReferenceNumber": 6, "SourceName": "CAMEO Chemicals", "URL": "https://cameochemicals.noaa.gov/chemical/890"},
+                {"ReferenceNumber": 7, "SourceName": "CAMEO Chemicals", "URL": "https://cameochemicals.noaa.gov/chemical/19279"},
+            ],
+            "Section": [
+                {
+                    "TOCHeading": "Personal Protective Equipment (PPE)",
+                    "Information": [
+                        {
+                            "ReferenceNumber": 6,
+                            "Value": {
+                                "StringWithMarkup": [
+                                    {"String": "Excerpt from ERG Guide 140 [Oxidizers]:"},
+                                    {"String": "Wear positive pressure self-contained breathing apparatus (SCBA)."},
+                                ]
+                            },
+                        },
+                        {
+                            "ReferenceNumber": 7,
+                            "Value": {
+                                "StringWithMarkup": [
+                                    {"String": "Excerpt from ERG Guide 143 [Oxidizers (Unstable)]:"},
+                                    {"String": "Wear positive pressure self-contained breathing apparatus (SCBA)."},
+                                ]
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+    }
+    monkeypatch.setattr(pubchem, "_fetch_heading", lambda cid, heading: fixture)
+
+    note = pubchem.get_safety_note(1, "Personal Protective Equipment (PPE)")
+
+    assert note is not None
+    assert len(note.excerpts) == 1  # the byte-identical second citation is dropped
+    assert note.excerpts[0].source_label == "ERG Guide 140 [Oxidizers]"  # first occurrence kept, deterministic
+
+
 def test_safety_note_groups_by_source_with_audience_labels(monkeypatch):
     # Reproduces the real shape confirmed live for sulfuric acid's PPE heading:
     # a "Excerpt from X:" marker names the true authority (NIOSH here rehosted

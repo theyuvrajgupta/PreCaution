@@ -245,12 +245,29 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
   return el;
 }
 
+// A pair's compact print label ("water + nitrogen") — precomputed once, here,
+// at normal render time, from the same chemical_ids the screen aggregation
+// already grouped by. Never re-derived from statement.text (which is prose,
+// not structured data) and never recomputed later at print time: app.js's
+// prepareForPrint reads this back from data-compact-label, it doesn't
+// rebuild it. See app.js's print-time row compaction for why this exists.
+function pairLabel(statement, chemicalNameById) {
+  const names = statement.chemical_ids.map((id) => chemicalNameById.get(id) || id);
+  return cap(names.join(" + "));
+}
+
 // §21: at six chemicals the interaction-hazard section produced ~8 "no established
 // data" gap cards (every co-present pair Stage 3 checks, not just the interesting
 // ones) sitting between the two real findings. Aggregate them into one expandable
 // card instead of one-card-per-pair — still fully inspectable, no longer burying
 // the real hazards. The real hazards themselves are never touched by this.
-function renderGapAggregate(gaps, heading) {
+//
+// Every row here always renders full (text + its own chip) — screen is untouched by
+// the print fix below. Print-time compaction (first row stays full as the category's
+// one representative citation, the rest collapse to their precomputed
+// data-compact-label) happens transiently in app.js's prepareForPrint/
+// restoreAfterPrint, not here — this function only supplies the label to compact to.
+function renderGapAggregate(gaps, heading, chemicalNameById) {
   const details = document.createElement("details");
   details.className = "card gap-card gap-aggregate rise-in";
 
@@ -265,6 +282,7 @@ function renderGapAggregate(gaps, heading) {
   for (const s of gaps) {
     const row = document.createElement("div");
     row.className = "gap-aggregate-row";
+    row.dataset.compactLabel = pairLabel(s, chemicalNameById);
     const body = document.createElement("p");
     body.className = "card-body";
     body.textContent = s.text;
@@ -274,7 +292,7 @@ function renderGapAggregate(gaps, heading) {
   return details;
 }
 
-function renderInteractionSection(brief) {
+function renderInteractionSection(brief, chemicalRecords) {
   const section = document.createElement("section");
   section.className = "interaction-section";
 
@@ -296,15 +314,28 @@ function renderInteractionSection(brief) {
   const checked = gaps.filter((s) => s.gap_status === "no_established_data");
   const uncheckable = gaps.filter((s) => s.gap_status === "insufficient_reactive_group_data");
 
+  const chemicalNameById = new Map();
+  for (const record of chemicalRecords) {
+    for (const id of record.chemical_ids) chemicalNameById.set(id, record.name);
+  }
+
   for (const s of hazards) section.appendChild(renderHazardCard(s));
   if (checked.length) {
     section.appendChild(
-      renderGapAggregate(checked, `${checked.length} pair${checked.length === 1 ? "" : "s"} checked against our reference set · none matched`)
+      renderGapAggregate(
+        checked,
+        `${checked.length} pair${checked.length === 1 ? "" : "s"} checked against our reference set · none matched`,
+        chemicalNameById
+      )
     );
   }
   if (uncheckable.length) {
     section.appendChild(
-      renderGapAggregate(uncheckable, `${uncheckable.length} pair${uncheckable.length === 1 ? "" : "s"} could not be checked · reactive-group data unavailable`)
+      renderGapAggregate(
+        uncheckable,
+        `${uncheckable.length} pair${uncheckable.length === 1 ? "" : "s"} could not be checked · reactive-group data unavailable`,
+        chemicalNameById
+      )
     );
   }
 
@@ -458,7 +489,7 @@ function renderUnresolvedSection(brief) {
 export function renderBrief(container, { brief, chemicalRecords, extractionDetail }) {
   clearChildren(container);
   container.appendChild(renderScanLayer(brief, chemicalRecords, extractionDetail));
-  container.appendChild(renderInteractionSection(brief));
+  container.appendChild(renderInteractionSection(brief, chemicalRecords));
   const unresolvedSection = renderUnresolvedSection(brief);
   if (unresolvedSection) container.appendChild(unresolvedSection);
   container.appendChild(renderChemicalsSection(brief, chemicalRecords));

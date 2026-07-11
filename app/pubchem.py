@@ -376,7 +376,25 @@ def get_safety_note(cid: int, heading: str) -> SafetyNote | None:
     if not excerpts:
         return None
 
-    return SafetyNote(heading=heading, excerpts=excerpts)
+    # Cross-citation dedup: the per-(label, line) `seen` set above only catches a
+    # repeat WITHIN one citation. PubChem also cites the exact same excerpt under two
+    # entirely different labels — confirmed live: hydrogen peroxide's PPE heading
+    # repeats its ERG guidance byte-for-byte under both "ERG Guide 140 [Oxidizers]"
+    # and "ERG Guide 143 [Oxidizers (Unstable)]", two different CAMEO URLs (890 vs
+    # 19279). Same fix as §19.2's original excerpt dedup, extended to catch this case
+    # too: dedupe on exact normalised (whitespace-collapsed) text, keeping the first
+    # occurrence — group_order's order, so deterministic — dropping any later citation
+    # whose combined text is identical to one already kept.
+    deduped: list[SafetyExcerpt] = []
+    seen_text: set[str] = set()
+    for excerpt in excerpts:
+        normalized = " ".join(excerpt.text.split())
+        if normalized in seen_text:
+            continue
+        seen_text.add(normalized)
+        deduped.append(excerpt)
+
+    return SafetyNote(heading=heading, excerpts=deduped)
 
 
 def ground_chemical(canonical_name: str) -> ChemicalHazardProfile:

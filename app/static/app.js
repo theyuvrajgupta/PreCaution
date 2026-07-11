@@ -413,6 +413,32 @@ function prepareForPrint() {
     el.open = true;
   });
 
+  // §21 print follow-up: on screen the no-data/could-not-check pairs collapse behind
+  // ONE disclosure toggle, but force-opening every group for print (above) used to mean
+  // N full duplicate-shaped cards — each with its own honest-omission sentence and its
+  // own citation chip — right after it, exactly the flood §21 exists to prevent, just
+  // relocated from screen to paper. Compact each aggregate to the SAME grouping the
+  // screen already computed: the first pair keeps its full sentence + chip as the
+  // category's one representative citation; every other row collapses to the compact
+  // "name + name" label render.js precomputed into data-compact-label at normal render
+  // time (never re-derived here — this only decides which of two already-rendered
+  // things to show). Each row's full HTML is snapshotted first so restoreAfterPrint can
+  // put it back exactly; screen itself is never touched, since this only runs between
+  // beforeprint/afterprint.
+  document.querySelectorAll(".gap-aggregate").forEach((aggregate) => {
+    const rows = aggregate.querySelectorAll(".gap-aggregate-row");
+    rows.forEach((row, i) => {
+      row.dataset.originalHtml = row.innerHTML;
+      if (i === 0) return; // keep the first row of THIS aggregate full
+      const label = row.dataset.compactLabel || "";
+      clearChildren(row);
+      const p = document.createElement("p");
+      p.className = "mono gap-aggregate-compact-line";
+      p.textContent = label;
+      row.appendChild(p);
+    });
+  });
+
   // §6.2/§17: a printed chip can't be clicked — turn it into a numbered
   // reference and collect a references list, so the paper copy is still
   // checkable, not just decorative.
@@ -442,6 +468,10 @@ function prepareForPrint() {
 }
 
 function restoreAfterPrint() {
+  document.querySelectorAll(".gap-aggregate-row[data-original-html]").forEach((row) => {
+    row.innerHTML = row.dataset.originalHtml;
+    delete row.dataset.originalHtml;
+  });
   document.querySelectorAll(".chemical-block, .source-group, .gap-aggregate").forEach((el) => {
     el.open = el.dataset.wasOpen === "1";
     delete el.dataset.wasOpen;

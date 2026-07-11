@@ -709,6 +709,14 @@ button:disabled {
   margin-top: 0.8em;
 }
 
+/* Only ever exists transiently — app.js's prepareForPrint builds this element
+   between beforeprint/afterprint and restoreAfterPrint removes it again, so it
+   never appears on screen. The row it sits in already has spacing/border from
+   .gap-aggregate-row above; this just needs to read as a quiet compact line. */
+.gap-aggregate-compact-line {
+  color: var(--muted-paper);
+}
+
 /* --- Provenance chip (§6.2) — paper/sheet only, chips never appear on bench */
 
 .chip {
@@ -1044,9 +1052,20 @@ a.chip:focus-visible {
   }
 
   .card,
-  .chemical-block,
   .source-group {
     break-inside: avoid;
+  }
+
+  /* .chemical-block (§20.2's per-chemical <details>) is deliberately excluded
+     from break-inside: avoid above — fully expanded, it routinely runs several
+     pages (e.g. sodium azide's NIOSH/ERG content), so "avoid" can never be
+     honoured. Chromium's print engine still tries: it pushes the whole block to
+     a fresh page rather than fall back to breaking inside immediately, which
+     wastes all the remaining space on the page before it (confirmed: azide's
+     block left a page ~85% blank). Keep the summary glued to its first line so
+     a chemical's name/CID never ends up alone at the bottom of a page instead. */
+  .chemical-summary {
+    break-after: avoid;
   }
 
   /* Chips print as numbered references, not boxed links — prepareForPrint
