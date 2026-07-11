@@ -55,6 +55,15 @@ const state = {
 function setState(next) {
   state.current = next;
   appEl.dataset.state = next;
+  // The bench pane's sticky thread is anchored within a container as tall as the
+  // (usually much longer) paper pane, so it can track scroll across the whole brief
+  // (§19.4). But that means whatever scroll position accumulated while the stage log
+  // was streaming carries straight into the freshly-rendered brief — the thread would
+  // open mid-stuck, below the fold, instead of at the top. A brief that just finished
+  // loading should always be seen from its own top.
+  if (next === "read" || next === "incomplete") {
+    window.scrollTo(0, 0);
+  }
   render();
 }
 

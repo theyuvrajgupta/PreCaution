@@ -42,6 +42,14 @@ _SAFETY_NOTE_KIND = {
     "Storage Conditions": "storage",
 }
 
+# CAMEO's own reactive-group taxonomy (surfaced live via app/pubchem.py's "Reactive
+# Group" heading) includes this as a genuine assignment, not an absence of data — e.g.
+# nitrogen is classified this way. It's a property of the CHEMICAL, so it's stated once
+# per chemical here, never once per pair it happens to co-occur with (pre-freeze fix,
+# 2026-07-11: a chemical present in N co-present pairs used to repeat the identical
+# classification sentence N times in the interaction section's no-data list).
+NOT_REACTIVE_GROUP = "Not Chemically Reactive"
+
 # Short noun form of a missing_sections heading, for the AGGREGATED per-chemical gap
 # statement (item 3, 2026-07-10: one card per chemical, not one per missing heading —
 # five missing headings used to mean five near-identical "no data" cards per chemical).
@@ -190,6 +198,21 @@ def _chemical_statements(chemical: Chemical, profile: ChemicalHazardProfile) -> 
                     chemical_ids=[chemical.id],
                 )
             )
+
+    not_reactive = next((g for g in profile.reactive_groups if g.group_name == NOT_REACTIVE_GROUP), None)
+    if not_reactive is not None:
+        statements.append(
+            BriefStatement(
+                text=(
+                    f"{_cap(chemical.canonical_name)} is classified {NOT_REACTIVE_GROUP} (CAMEO). "
+                    "It has no known reactive hazard class of its own."
+                ),
+                kind="reactive_classification",
+                source_ref=not_reactive.source.source_name,
+                source_url=not_reactive.source.url,
+                chemical_ids=[chemical.id],
+            )
+        )
 
     for note in profile.safety_notes:
         kind = _SAFETY_NOTE_KIND.get(note.heading)
@@ -357,15 +380,12 @@ def _interaction_statement(
 
     # status in {"no_established_data", "insufficient_reactive_group_data"} — reuse the
     # finding's own note verbatim; it's already carefully worded for honest omission.
-    # A real CAMEO classification (e.g. "Not Chemically Reactive") gets cited to its own
-    # source rather than the generic interaction-table placeholder — it's a lookup, not
-    # an absence (§21).
-    if finding.classification_source is not None:
-        source_ref = finding.classification_source.source_name
-        source_url = finding.classification_source.url
-    else:
-        source_ref = "PreCaution interaction table"
-        source_url = None
+    # A real CAMEO classification (e.g. "Not Chemically Reactive") is a property of one
+    # chemical, not of this pair — it gets its own once-per-chemical statement instead
+    # (see _chemical_statements/NOT_REACTIVE_GROUP), so every pair falls back to the
+    # generic interaction-table placeholder here, never a per-pair CAMEO citation.
+    source_ref = "PreCaution interaction table"
+    source_url = None
     return BriefStatement(
         text=finding.note or "",
         kind="interaction_no_data",
@@ -458,17 +478,24 @@ def build_brief(
     for group in pair_groups.values():
         statements.append(_interaction_statement(group, protocol_chemical_names))
 
-    # Exactly one, always — independent of whether any PPE data was found. See
-    # Build_Spec.md §4.4: the least groundable claim in this whole layer is a
-    # compound-specific glove recommendation, so we disclose the gap instead of
-    # guessing. This disclosure is a feature, not a footnote.
-    statements.append(
-        BriefStatement(
-            text=_GLOVE_DISCLOSURE_TEXT,
-            kind="limitation_disclosure",
-            source_ref="OSHA",
+    # UI_Design_Spec.md §6.6: "attached to the PPE section"; §15 item 4: "attached to
+    # PPE where it bites." This qualifies REAL PPE content that was actually rendered —
+    # it does not exist to announce the concept of a PPE gap in the abstract. Only add it
+    # when at least one chemical actually has a PPE statement (pre-freeze fix, 2026-07-11:
+    # when nothing in the whole brief has PPE data — e.g. DAPI, confirmed live: found=True
+    # but every section is in missing_sections — the disclosure's own copy says "the PPE
+    # guidance ABOVE is what PubChem publishes," which is false when nothing is above it,
+    # implying guidance was given and then withheld. Each chemical's own no_data gap card
+    # already says PPE data is missing, so the honest-omission rule stays satisfied without
+    # this card also appearing as an orphan with nothing to attach to.)
+    if any(s.kind == "ppe" for s in statements):
+        statements.append(
+            BriefStatement(
+                text=_GLOVE_DISCLOSURE_TEXT,
+                kind="limitation_disclosure",
+                source_ref="OSHA",
+            )
         )
-    )
 
     steps = [
         BriefStep(

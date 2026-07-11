@@ -177,10 +177,14 @@ def test_unrelated_known_groups_report_no_established_data_not_safe():
     assert "not" in findings[0].note.lower()  # explicitly says this isn't a safety claim
 
 
-def test_not_chemically_reactive_pair_states_classification_not_absence():
-    # UI_Design_Spec.md §21's "free grounding win": nitrogen's CAMEO reactive group is
-    # literally "Not Chemically Reactive" (confirmed live 2026-07-10) — that's a real
-    # assignment, not missing data, and the no-data note should say so.
+def test_not_chemically_reactive_pair_uses_generic_note_not_per_pair_classification():
+    # Pre-freeze fix, 2026-07-11: a chemical's CAMEO "Not Chemically Reactive" assignment
+    # (nitrogen's, confirmed live 2026-07-10) is a property of that CHEMICAL, not of each
+    # pair it happens to co-occur with. It used to be folded into this pair-level note,
+    # which meant a chemical present in N pairs repeated the identical classification
+    # sentence N times (§21's "free grounding win" over-applied). Stated once instead, as
+    # its own per-chemical statement (see tests/test_brief.py) — this pair-level note
+    # stays fully generic, with no markdown and no per-pair classification wording.
     result = ExtractionResult(
         chemicals=[
             Chemical(id="c1", as_written="water", canonical_name="water", resolution_reasoning="Direct match."),
@@ -206,7 +210,7 @@ def test_not_chemically_reactive_pair_states_classification_not_absence():
     assert len(findings) == 1
     finding = findings[0]
     assert finding.status == "no_established_data"  # still not a matrix hazard verdict
-    assert "Nitrogen is classified **Not Chemically Reactive**" in finding.note  # sentence-case leading fragment
-    assert "does not establish" in finding.note  # never concludes safety
-    assert finding.classification_source is not None
-    assert finding.classification_source.url == "https://cameochemicals.noaa.gov/chemical/x"
+    assert "**" not in finding.note  # no literal markdown in rendered text
+    assert "classified" not in finding.note.lower()  # that claim now lives per-chemical, not per-pair
+    assert "No established interaction data in our local table" in finding.note
+    assert "not" in finding.note.lower()  # still explicitly not a safety claim

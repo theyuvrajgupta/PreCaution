@@ -203,6 +203,53 @@ def test_glove_disclosure_is_present_and_own_statement():
         assert disclosures[0].text not in ppe.text
 
 
+def test_glove_disclosure_omitted_when_no_chemical_has_ppe_data():
+    """Pre-freeze fix, 2026-07-11: the disclosure text says 'The PPE guidance ABOVE is
+    what PubChem publishes' — UI_Design_Spec.md §6.6 says render it 'attached to the PPE
+    section', §15 item 4 says 'attached to PPE where it bites'. When not one chemical in
+    the whole brief has any PPE data (e.g. DAPI, confirmed live: found=True but every
+    section including PPE is in missing_sections), there is no PPE guidance above for it
+    to qualify — showing it anyway would imply guidance was given and then withheld. The
+    absence is already honestly surfaced by each chemical's own 'no_data' gap card
+    ('no GHS classification, PPE, first aid...'); this disclosure must not also appear
+    as an orphaned card with nothing to attach to."""
+    result = ExtractionResult(
+        chemicals=[
+            Chemical(id="c1", as_written="DAPI", canonical_name="DAPI", resolution_reasoning="x"),
+        ],
+        steps=[
+            Step(
+                number=1,
+                text="Weigh out 10 mg of DAPI powder.",
+                chemicals_present=[StepChemicalRef(chemical_id="c1", origin="added")],
+            )
+        ],
+    )
+    profiles = {
+        "DAPI": ChemicalHazardProfile(
+            query_name="DAPI",
+            found=True,
+            cid=2954,
+            pubchem_url="https://pubchem.ncbi.nlm.nih.gov/compound/2954",
+            missing_sections=[
+                "GHS Classification",
+                "Reactive Group",
+                "Personal Protective Equipment (PPE)",
+                "First Aid Measures",
+                "Disposal Methods",
+                "Storage Conditions",
+            ],
+        ),
+    }
+    findings = find_step_interactions(result, profiles)
+
+    brief = build_brief(result, profiles, findings)
+
+    assert not [s for s in brief.statements if s.kind == "ppe"]  # confirms the premise
+    assert not [s for s in brief.statements if s.kind == "limitation_disclosure"]
+    assert [s for s in brief.statements if s.kind == "no_data"]  # absence still surfaced, just not twice
+
+
 def test_found_false_chemical_emits_no_data_not_silence():
     result = _demo_extraction_result()
     profiles = _fully_grounded_demo_profiles()
@@ -503,6 +550,58 @@ def test_gap_status_distinguishes_checked_from_uncheckable():
         assert "could not find authoritative reactive-group data" in uncheckable.text.lower()
 
     assert checked.gap_status != by_pair[frozenset(("c1", "c3"))].gap_status
+
+
+def test_reactive_classification_emitted_once_per_chemical_not_per_pair():
+    """Pre-freeze fix, 2026-07-11: nitrogen co-present with 3 other chemicals used to
+    repeat "Nitrogen is classified **Not Chemically Reactive**..." once per pair (3
+    times) in the no-data section, with literal markdown asterisks. It's a property of
+    the chemical, not of any one pair — must appear exactly once, as its own
+    'reactive_classification' statement, plain text, with the CAMEO citation. The
+    pair-level 'interaction_no_data' statements must still exist (one per pair, for the
+    'N pairs checked' count) but must no longer carry the classification wording."""
+    chemicals = [
+        Chemical(id="c1", as_written="nitrogen", canonical_name="nitrogen", resolution_reasoning="x"),
+        Chemical(id="c2", as_written="water", canonical_name="water", resolution_reasoning="x"),
+        Chemical(id="c3", as_written="ethanol", canonical_name="ethanol", resolution_reasoning="x"),
+        Chemical(id="c4", as_written="glycerin", canonical_name="glycerin", resolution_reasoning="x"),
+    ]
+    steps = [
+        Step(
+            number=1,
+            text="Combine nitrogen headspace over water, ethanol, and glycerin in one flask.",
+            chemicals_present=[StepChemicalRef(chemical_id=c.id, origin="added") for c in chemicals],
+        )
+    ]
+    result = ExtractionResult(chemicals=chemicals, steps=steps)
+    profiles = {
+        "nitrogen": _full_profile("nitrogen", 947, "Not Chemically Reactive"),
+        "water": _full_profile("water", 962, "Water and Aqueous Solutions"),
+        "ethanol": _full_profile("ethanol", 702, "Alcohols and Glycols"),
+        "glycerin": _full_profile("glycerin", 753, "Alcohols and Glycols"),
+    }
+    findings = find_step_interactions(result, profiles)  # 6 pairs total, 3 involving nitrogen
+
+    brief = build_brief(result, profiles, findings)
+
+    classifications = [s for s in brief.statements if s.kind == "reactive_classification"]
+    assert len(classifications) == 1, "must be stated once per chemical, not once per pair it co-occurs with"
+    statement = classifications[0]
+    assert statement.chemical_ids == ["c1"]
+    assert statement.text == (
+        "Nitrogen is classified Not Chemically Reactive (CAMEO). "
+        "It has no known reactive hazard class of its own."
+    )
+    assert "**" not in statement.text  # no literal markdown
+    assert statement.source_ref == "CAMEO Chemicals"
+    assert statement.source_url == "https://cameochemicals.noaa.gov/chemical/x"
+
+    # The pairs themselves are still counted (6 total: c1-c2, c1-c3, c1-c4, c2-c3, c2-c4, c3-c4).
+    no_data = [s for s in brief.statements if s.kind == "interaction_no_data"]
+    assert len(no_data) == 6
+    for s in no_data:
+        assert "**" not in s.text
+        assert "classified" not in s.text.lower()
 
 
 def test_step_context_flagged_unverified():

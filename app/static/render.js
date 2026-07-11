@@ -37,6 +37,10 @@ const GAP_HEADING = {
   interaction_no_data: "NO AUTHORITATIVE DATA",
   grounding_incomplete: "GROUNDING INCOMPLETE",
   unresolved_mention: "UNRESOLVED MENTION",
+  // Not a gap — a real CAMEO classification (a "free grounding win", not an absence of
+  // data) — but reuses the gap-card's quiet, non-hazard visual treatment since it's
+  // still non-hazard content, distinct heading so it never reads as missing data.
+  reactive_classification: "REACTIVE-GROUP CLASSIFICATION",
 };
 
 function clearChildren(el) {
@@ -344,7 +348,9 @@ function renderChemicalRow(record, brief, gloveState) {
   const hazardIdentity = own.find((s) => s.kind === "hazard_identity");
   const precautionary = own.filter((s) => s.kind === "precautionary");
   const safetyNotes = own.filter((s) => SAFETY_NOTE_KINDS.includes(s.kind));
-  const gaps = own.filter((s) => s.kind === "no_data" || s.kind === "grounding_incomplete");
+  const gaps = own.filter(
+    (s) => s.kind === "no_data" || s.kind === "grounding_incomplete" || s.kind === "reactive_classification"
+  );
 
   // §20.2: one collapsed row per chemical — collapsed by default so the brief stops
   // reading as a wall of text. Never truncated: everything is still here, just folded.
@@ -419,16 +425,14 @@ function renderChemicalsSection(brief, chemicalRecords) {
   eyebrow.textContent = "PER-CHEMICAL CONTROLS";
   section.appendChild(eyebrow);
 
+  // brief.statements only contains a limitation_disclosure when at least one chemical
+  // actually has a PPE statement to attach it to (app/brief.py) — so gloveState.statement
+  // being present already guarantees renderChemicalRow's per-chemical loop below will
+  // find that PPE statement and render the notice next to it. No fallback needed.
   const gloveState = { statement: brief.statements.find((s) => s.kind === "limitation_disclosure"), rendered: false };
 
   for (const record of chemicalRecords) {
     section.appendChild(renderChemicalRow(record, brief, gloveState));
-  }
-
-  // No chemical had PPE data at all (all missing) — still show the disclosure once,
-  // never silently skip it.
-  if (!gloveState.rendered && gloveState.statement) {
-    section.appendChild(renderGloveNotice(gloveState.statement));
   }
 
   return section;

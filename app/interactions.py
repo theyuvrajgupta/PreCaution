@@ -29,15 +29,7 @@ from app.models import (
     ChemicalHazardProfile,
     ExtractionResult,
     ReactiveGroupEntry,
-    SourceRef,
 )
-
-# CAMEO's own reactive-group taxonomy (surfaced live via app/pubchem.py) includes this
-# as a genuine assignment, not an absence of data — e.g. nitrogen is classified this way.
-# Worth stating as a classification rather than folding it into the generic
-# "no established data" phrasing (UI_Design_Spec.md §21's "free grounding win").
-_NOT_REACTIVE_GROUP = "Not Chemically Reactive"
-
 
 class ChemicalPairFinding(BaseModel):
     step_number: int
@@ -78,24 +70,6 @@ class ChemicalPairFinding(BaseModel):
     status: Literal["hazard_found", "no_established_data", "insufficient_reactive_group_data"]
     verdict: InteractionVerdict | None = None
     note: str | None = None
-    classification_source: SourceRef | None = Field(
-        default=None,
-        description="Set only when note states a real CAMEO reactive-group classification (e.g. 'Not "
-        "Chemically Reactive') rather than a generic no-data statement — the source behind that specific "
-        "claim, so the UI can cite it instead of the generic interaction-table placeholder.",
-    )
-
-
-def _cap(text: str) -> str:
-    """First-letter capitalization only — never .capitalize(), which would lowercase
-    the rest of the string too. Chemical names are correctly lowercase mid-sentence;
-    this exists only for the one statement here that happens to lead with one (see
-    UI_Design_Spec.md §9's sentence-case rule, and app/brief.py's identical helper)."""
-    return text[:1].upper() + text[1:] if text else text
-
-
-def _find_classification(name: str, entries: list[ReactiveGroupEntry], group_name: str) -> ReactiveGroupEntry | None:
-    return next((e for e in entries if e.group_name == group_name), None)
 
 
 def _find_added_step(chemical_id: str, up_to_step: int, steps: list) -> int | None:
@@ -132,38 +106,23 @@ def _find_vessel_entry_step(chemical_id: str, up_to_step: int, steps: list) -> i
     return entry_step
 
 
-def _no_data_note(
-    name_a: str, entries_a: list[ReactiveGroupEntry], name_b: str, entries_b: list[ReactiveGroupEntry]
-) -> tuple[str, SourceRef | None]:
-    """Text (and, if applicable, its source) for a pair with no matrix verdict.
+def _no_data_note(name_a: str, entries_a: list[ReactiveGroupEntry], name_b: str, entries_b: list[ReactiveGroupEntry]) -> str:
+    """Text for a pair with no matrix verdict.
 
-    If either chemical's reactive group is CAMEO's own "Not Chemically Reactive"
-    assignment, state that classification rather than the generic no-data phrasing —
-    it's a real, live-fetched grounding result, not an absence (§21's "free win").
-    Never concludes safety from it.
+    Deliberately generic even when one member's own reactive group is CAMEO's "Not
+    Chemically Reactive" assignment — that's a property of the CHEMICAL, stated once
+    per chemical elsewhere (app/brief.py's NOT_REACTIVE_GROUP statement), not repeated
+    here for every pair that chemical happens to co-occur with (pre-freeze fix,
+    2026-07-11: this used to special-case that classification into the pair-level note,
+    which meant a chemical present in N pairs repeated the identical sentence N times).
     """
-    classified = [
-        (name, _find_classification(name, entries, _NOT_REACTIVE_GROUP))
-        for name, entries in ((name_a, entries_a), (name_b, entries_b))
-    ]
-    classified = [(name, entry) for name, entry in classified if entry is not None]
-    if classified:
-        stated = " and ".join(f"{name} is classified **{_NOT_REACTIVE_GROUP}**" for name, _ in classified)
-        text = _cap(
-            f"{stated} (CAMEO). This does not establish that combining {name_a} and {name_b} is safe — "
-            f"only that {'this chemical has' if len(classified) == 1 else 'these chemicals have'} no known "
-            f"reactive hazard class of its own. Consult an SDS."
-        )
-        return text, classified[0][1].source
-
     groups_a_names = [e.group_name for e in entries_a]
     groups_b_names = [e.group_name for e in entries_b]
-    text = (
+    return (
         f"No established interaction data in our local table for "
         f"{name_a} ({', '.join(groups_a_names)}) + {name_b} ({', '.join(groups_b_names)}). "
         f"This does not mean the combination is safe — only that it is not in our current reference set."
     )
-    return text, None
 
 
 def find_step_interactions(
@@ -223,15 +182,12 @@ def find_step_interactions(
             if verdict is not None:
                 findings.append(ChemicalPairFinding(**base, status="hazard_found", verdict=verdict))
             else:
-                note, classification_source = _no_data_note(
-                    chem_a.canonical_name, entries_a, chem_b.canonical_name, entries_b
-                )
+                note = _no_data_note(chem_a.canonical_name, entries_a, chem_b.canonical_name, entries_b)
                 findings.append(
                     ChemicalPairFinding(
                         **base,
                         status="no_established_data",
                         note=note,
-                        classification_source=classification_source,
                     )
                 )
 

@@ -183,6 +183,7 @@ BriefKind = Literal[
     "storage",
     "interaction_hazard",
     "interaction_no_data",
+    "reactive_classification",
     "step_context",
     "limitation_disclosure",
     "no_data",
