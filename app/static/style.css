@@ -57,7 +57,10 @@
   --size-body: 15px;
   --size-step-title: 17px;
 
-  --gutter-width: 44px;
+  /* 44px wasn't enough to give the spine (line + diamond) and the chemical-id
+     tokens their own non-overlapping columns — widened so both fit with room
+     to spare (§6.1 cosmetic fix: junctions were reading as clutter). */
+  --gutter-width: 56px;
 }
 
 /* --- Reset ------------------------------------------------------------ */
@@ -275,11 +278,17 @@ button:disabled {
   margin: 0 0 1rem;
 }
 
-/* --- Carryover thread: gutter marks (§6.1) -------------------------------- */
+/* --- Carryover thread: gutter marks (§6.1) --------------------------------
+   Two columns, not one shared 0-44px scrum: the spine (line + diamond) owns
+   0-~19px, centred on x=9.5px; the chemical-id tokens (dot + label) start at
+   24px, clearing the diamond's rotated bounding box (~18.7px) with room to
+   spare. Cosmetic fix — colours/shapes/hot-vs-inert treatment unchanged, this
+   is spacing only. Purely CSS `left` values; drawGutter's vertical (`top`)
+   math in thread.js is untouched. */
 
 .gutter-line {
   position: absolute;
-  left: 19px;
+  left: 8px;
   width: 3px;
   background: var(--ink-bench);
   opacity: 0.3;
@@ -290,7 +299,7 @@ button:disabled {
    app (the one asset no per-chemical checklist tool has) — sized to read as
    such, not as a thin rule. */
 .gutter-line-hot {
-  left: 18px; /* keep centred as the bar widens 3px -> 5px */
+  left: 7px; /* keep centred as the bar widens 3px -> 5px */
   width: 5px;
   background: var(--danger);
   opacity: 1;
@@ -298,7 +307,7 @@ button:disabled {
 
 .gutter-token {
   position: absolute;
-  left: 4px;
+  left: 24px;
   display: flex;
   align-items: center;
   gap: 3px;
@@ -321,7 +330,7 @@ button:disabled {
 
 .gutter-diamond {
   position: absolute;
-  left: 14px;
+  left: 3px;
   width: 13px;
   height: 13px;
   background: var(--danger);
