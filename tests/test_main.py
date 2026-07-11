@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 from app import pipeline
 from app.config import get_settings
 from app.extraction import ExtractionError
+from app.interaction_matrix import lookup_verdict
 from app.main import app
 from app.models import ChemicalHazardProfile, ExtractionResult
 from test_brief import _full_profile
@@ -66,6 +67,34 @@ def _parse_sse_frames(text: str) -> list[tuple[str, dict]]:
         data = json.loads(lines[1][len("data: ") :])  # must be valid JSON — proves no frame corruption
         frames.append((event, data))
     return frames
+
+
+def test_interaction_matrix_endpoint_matches_the_real_table():
+    """The in-app interaction-table panel must render the SAME data
+    app.interactions.find_step_interactions actually looks verdicts up in — this
+    spot-checks one known entry (piranha solution's pair) against the module the
+    engine calls directly, not against a copy."""
+    client = TestClient(app)
+    response = client.get("/interaction-matrix")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert isinstance(body, list)
+    assert body  # non-empty — the seed set is small but never zero
+
+    expected = lookup_verdict("Oxidizing Agents, Strong", "Acids, Strong Oxidizing")
+    assert expected is not None
+    match = next(
+        (
+            v
+            for v in body
+            if {v["group_a"], v["group_b"]} == {"Oxidizing Agents, Strong", "Acids, Strong Oxidizing"}
+        ),
+        None,
+    )
+    assert match is not None
+    assert match["categories"] == expected.categories
+    assert match["source"]["url"] == expected.source.url
 
 
 def test_brief_endpoint_success(monkeypatch):

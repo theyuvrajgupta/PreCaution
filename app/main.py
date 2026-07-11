@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.extraction import ExtractionError, extract
+from app.interaction_matrix import InteractionVerdict, all_verdicts
 from app.models import ExtractionResult
 from app.pipeline import (
     PipelineResult,
@@ -30,6 +31,14 @@ class ExtractRequest(BaseModel):
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/interaction-matrix")
+def interaction_matrix_endpoint() -> list[InteractionVerdict]:
+    """The real, hand-encoded pairwise interaction table (app/interaction_matrix.py) —
+    read-only, for the web UI's interaction-table panel. Same object the interaction
+    engine looks verdicts up in; this endpoint adds no logic of its own."""
+    return all_verdicts()
 
 
 @app.post("/extract")

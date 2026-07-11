@@ -89,6 +89,20 @@
     protocol. Claude did not write the safety advice.
   </footer>
 
+  <!-- Reachable from the no-data section's chip and each hazard card's "View the
+       full interaction table" link — same panel, two entry points, rendered from
+       GET /interaction-matrix (app.js), the real table the engine reads. -->
+  <dialog id="interaction-table-dialog" class="interaction-table-dialog" aria-labelledby="interaction-table-dialog-title">
+    <p class="eyebrow" id="interaction-table-dialog-title">PreCaution interaction table</p>
+    <p class="modal-intro">
+      Every interaction verdict PreCaution can raise comes from this table — a small,
+      hand-checked set of reactive-group pairs, each sourced directly from CAMEO Chemicals. A
+      combination not listed here has no established data in our set.
+    </p>
+    <div id="interaction-table-body" class="interaction-table-body"></div>
+    <button type="button" id="interaction-table-close" class="modal-close">Close</button>
+  </dialog>
+
   <script type="module" src="/app.js"></script>
 </body>
 </html>

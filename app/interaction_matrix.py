@@ -256,3 +256,10 @@ def lookup_verdict(group_a: str, group_b: str) -> InteractionVerdict | None:
 def known_pairs() -> list[tuple[str, str]]:
     """For introspection/debugging: every (group_a, group_b) pair currently in the table."""
     return [(v.group_a, v.group_b) for v in _TABLE.values()]
+
+
+def all_verdicts() -> list[InteractionVerdict]:
+    """Every verdict in the table, for the in-app interaction-table panel (app/main.py's
+    GET /interaction-matrix). Read-only accessor over the same _TABLE lookup_verdict
+    reads — the panel must render this module's real data, never a copy of it."""
+    return list(_TABLE.values())

@@ -67,7 +67,23 @@ function renderChip(statement) {
   return el;
 }
 
-function renderHazardCard(statement) {
+// The "PreCaution interaction table" reference used to render as an inert
+// <span> (via renderChip, since these statements carry no source_url) —
+// looked like every other clickable chip but did nothing. It's the one
+// citation this app CAN make genuinely clickable in-app (the table is local
+// data, not a remote URL), so it gets its own button-chip instead, wired by
+// the caller (app.js owns opening/fetching the panel; this module only
+// builds DOM — see the file header's "no fetch, no logic" rule).
+function renderInteractionTableChip(onOpenInteractionTable) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "chip chip-action mono";
+  btn.textContent = "PreCaution interaction table";
+  btn.addEventListener("click", () => onOpenInteractionTable());
+  return btn;
+}
+
+function renderHazardCard(statement, onOpenInteractionTable) {
   const card = document.createElement("div");
   card.className = "card hazard-card rise-in";
 
@@ -105,6 +121,16 @@ function renderHazardCard(statement) {
     note.textContent = statement.hazard_note;
     card.appendChild(note);
   }
+
+  // Second entry point into the interaction-table panel (the first is the
+  // no-data section's chip below) — a judge reading a real finding should be
+  // able to reach the same small table this verdict was looked up in.
+  const viewTableBtn = document.createElement("button");
+  viewTableBtn.type = "button";
+  viewTableBtn.className = "mono interaction-table-link";
+  viewTableBtn.textContent = "View the full interaction table";
+  viewTableBtn.addEventListener("click", () => onOpenInteractionTable());
+  card.appendChild(viewTableBtn);
 
   return card;
 }
@@ -267,7 +293,7 @@ function pairLabel(statement, chemicalNameById) {
 // one representative citation, the rest collapse to their precomputed
 // data-compact-label) happens transiently in app.js's prepareForPrint/
 // restoreAfterPrint, not here — this function only supplies the label to compact to.
-function renderGapAggregate(gaps, heading, chemicalNameById) {
+function renderGapAggregate(gaps, heading, chemicalNameById, onOpenInteractionTable) {
   const details = document.createElement("details");
   details.className = "card gap-card gap-aggregate rise-in";
 
@@ -286,13 +312,81 @@ function renderGapAggregate(gaps, heading, chemicalNameById) {
     const body = document.createElement("p");
     body.className = "card-body";
     body.textContent = s.text;
-    row.append(body, renderChip(s));
+    // Every interaction_no_data statement cites the same generic source ("PreCaution
+    // interaction table", no source_url — see app/brief.py::_interaction_statement),
+    // so this is never renderChip's generic span/link — always the dedicated,
+    // genuinely-clickable button (see its own comment above).
+    row.append(body, renderInteractionTableChip(onOpenInteractionTable));
     details.appendChild(row);
   }
   return details;
 }
 
-function renderInteractionSection(brief, chemicalRecords) {
+// §22: the no-data cards used to start immediately after the two hazard cards with
+// no framing, reading as if the brief had just run out of things to say. This wraps
+// them with an explicit header ("checked", not "no data" — an action, not an error),
+// one plain-language sentence on what "no established interaction" actually means,
+// and two separately-labelled sub-groups: "checked, found nothing recorded" is a
+// materially different epistemic state from "couldn't even look" (BriefStatement.
+// gap_status, unchanged — see the split below), and a newcomer needs that told to
+// them, not inferred from two similarly-shaped aggregate cards back to back.
+function renderNoDataSubgroup(label, gaps, aggregateHeading, chemicalNameById, onOpenInteractionTable) {
+  const group = document.createElement("div");
+  group.className = "no-data-subgroup";
+
+  const labelEl = document.createElement("p");
+  labelEl.className = "eyebrow no-data-subgroup-label";
+  labelEl.textContent = label;
+  group.appendChild(labelEl);
+
+  group.appendChild(renderGapAggregate(gaps, aggregateHeading, chemicalNameById, onOpenInteractionTable));
+  return group;
+}
+
+function renderNoDataSection(checked, uncheckable, chemicalNameById, onOpenInteractionTable) {
+  const wrap = document.createElement("div");
+  wrap.className = "no-data-section";
+
+  const heading = document.createElement("p");
+  heading.className = "signal no-data-heading";
+  heading.textContent = "CHECKED — NO ESTABLISHED INTERACTION";
+  wrap.appendChild(heading);
+
+  const framing = document.createElement("p");
+  framing.className = "no-data-framing";
+  framing.textContent =
+    "We checked these combinations against our reference data and found no established " +
+    "interaction. That is not the same as safe — it means no authoritative source in our set " +
+    "describes them. Treat with normal caution and consult the SDS.";
+  wrap.appendChild(framing);
+
+  if (checked.length) {
+    wrap.appendChild(
+      renderNoDataSubgroup(
+        "Checked · no match in reference set",
+        checked,
+        `${checked.length} pair${checked.length === 1 ? "" : "s"} checked against our reference set · none matched`,
+        chemicalNameById,
+        onOpenInteractionTable
+      )
+    );
+  }
+  if (uncheckable.length) {
+    wrap.appendChild(
+      renderNoDataSubgroup(
+        "Could not be checked · reactive-group data unavailable",
+        uncheckable,
+        `${uncheckable.length} pair${uncheckable.length === 1 ? "" : "s"} could not be checked · reactive-group data unavailable`,
+        chemicalNameById,
+        onOpenInteractionTable
+      )
+    );
+  }
+
+  return wrap;
+}
+
+function renderInteractionSection(brief, chemicalRecords, onOpenInteractionTable) {
   const section = document.createElement("section");
   section.className = "interaction-section";
 
@@ -319,24 +413,9 @@ function renderInteractionSection(brief, chemicalRecords) {
     for (const id of record.chemical_ids) chemicalNameById.set(id, record.name);
   }
 
-  for (const s of hazards) section.appendChild(renderHazardCard(s));
-  if (checked.length) {
-    section.appendChild(
-      renderGapAggregate(
-        checked,
-        `${checked.length} pair${checked.length === 1 ? "" : "s"} checked against our reference set · none matched`,
-        chemicalNameById
-      )
-    );
-  }
-  if (uncheckable.length) {
-    section.appendChild(
-      renderGapAggregate(
-        uncheckable,
-        `${uncheckable.length} pair${uncheckable.length === 1 ? "" : "s"} could not be checked · reactive-group data unavailable`,
-        chemicalNameById
-      )
-    );
+  for (const s of hazards) section.appendChild(renderHazardCard(s, onOpenInteractionTable));
+  if (checked.length || uncheckable.length) {
+    section.appendChild(renderNoDataSection(checked, uncheckable, chemicalNameById, onOpenInteractionTable));
   }
 
   return section;
@@ -486,11 +565,71 @@ function renderUnresolvedSection(brief) {
   return section;
 }
 
-export function renderBrief(container, { brief, chemicalRecords, extractionDetail }) {
+export function renderBrief(container, { brief, chemicalRecords, extractionDetail, onOpenInteractionTable }) {
   clearChildren(container);
   container.appendChild(renderScanLayer(brief, chemicalRecords, extractionDetail));
-  container.appendChild(renderInteractionSection(brief, chemicalRecords));
+  container.appendChild(renderInteractionSection(brief, chemicalRecords, onOpenInteractionTable));
   const unresolvedSection = renderUnresolvedSection(brief);
   if (unresolvedSection) container.appendChild(unresolvedSection);
   container.appendChild(renderChemicalsSection(brief, chemicalRecords));
+}
+
+// https://cameochemicals.noaa.gov/reactivity/documentation/RG44-RG2 -> "NOAA CAMEO
+// documentation/RG44-RG2" — mirrors app/brief.py::_cameo_react_label exactly (same
+// mechanical last-two-path-segments derivation), so an interaction-table panel row's
+// chip reads identically to the matching hazard card's chip for the same entry.
+function cameoLabel(url) {
+  if (!url) return null;
+  const parts = url.replace(/\/+$/, "").split("/");
+  if (parts.length < 2) return null;
+  return `NOAA CAMEO ${parts[parts.length - 2]}/${parts[parts.length - 1]}`;
+}
+
+// The in-app interaction-table panel (app.js fetches GET /interaction-matrix and
+// calls this) — a pure render of whatever the endpoint returns, same "no fetch, no
+// logic" boundary as the rest of this file. Deliberately no sorting/filtering/
+// pagination: it's a small, honest table, shown in full, once.
+export function renderInteractionTable(container, verdicts) {
+  clearChildren(container);
+  if (!verdicts.length) {
+    const p = document.createElement("p");
+    p.className = "mono";
+    p.textContent = "No entries in the local interaction table yet.";
+    container.appendChild(p);
+    return;
+  }
+  for (const v of verdicts) {
+    const row = document.createElement("div");
+    row.className = "interaction-table-row";
+
+    const pair = document.createElement("p");
+    pair.className = "interaction-table-pair";
+    pair.textContent = `${v.group_a} × ${v.group_b}`;
+    row.appendChild(pair);
+
+    const summary = document.createElement("p");
+    summary.className = "interaction-table-summary";
+    summary.textContent = v.categories;
+    row.appendChild(summary);
+
+    if (v.note) {
+      const note = document.createElement("p");
+      note.className = "interaction-table-note";
+      note.textContent = v.note;
+      row.appendChild(note);
+    }
+
+    const source = v.source || {};
+    const chip = document.createElement("a");
+    chip.className = "chip mono";
+    chip.textContent = cameoLabel(source.url) || source.source_name || "Source";
+    if (source.url) {
+      chip.href = source.url;
+      chip.target = "_blank";
+      chip.rel = "noopener";
+    }
+    row.appendChild(chip);
+
+    container.appendChild(row);
+  }
 }

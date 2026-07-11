@@ -658,6 +658,30 @@ button:disabled {
   max-width: 72ch;
 }
 
+/* §22.2: second entry point into the interaction-table panel — a plain understated
+   link rather than a full .chip, since it isn't the citation for the quote above it
+   (that's still the real .chip), just a way to reach the whole small table. */
+.interaction-table-link {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: 0.6em;
+  display: block;
+  font-size: var(--size-mono);
+  color: var(--source);
+  text-decoration: underline;
+}
+
+.interaction-table-link:hover {
+  color: var(--ink);
+}
+
+.interaction-table-link:focus-visible {
+  outline: 2px solid var(--source);
+  outline-offset: 2px;
+}
+
 /* Gap cards get a diagonal hazard-tape hatch on the left edge instead of a
    solid rule — never red, never green, same visual weight as a hazard card. */
 .gap-card {
@@ -717,6 +741,33 @@ button:disabled {
   color: var(--muted-paper);
 }
 
+/* §22: the no-data cards used to start right after the hazard cards with no
+   framing — a header ("checked", never "no data" — reads as an action, not an
+   error), one plain-language sentence, then two separately-labelled sub-groups.
+   --gap (slate), never --danger: these are absence-of-finding, not findings. */
+.no-data-section {
+  margin-top: 1.5rem;
+}
+
+.no-data-heading {
+  color: var(--gap);
+  display: block;
+  margin-bottom: 0.4em;
+}
+
+.no-data-framing {
+  max-width: 72ch;
+  margin: 0 0 1.2em;
+}
+
+.no-data-subgroup {
+  margin-bottom: 1rem;
+}
+
+.no-data-subgroup-label {
+  margin: 0 0 0.5em;
+}
+
 /* --- Provenance chip (§6.2) — paper/sheet only, chips never appear on bench */
 
 .chip {
@@ -731,9 +782,23 @@ button:disabled {
 }
 
 a.chip:hover,
-a.chip:focus-visible {
+a.chip:focus-visible,
+.chip-action:hover,
+.chip-action:focus-visible {
   background: var(--source);
   color: var(--sheet);
+}
+
+/* §22.2: the "PreCaution interaction table" reference used to be an inert <span>
+   (renderChip never links it — these statements carry no source_url) that still
+   looked exactly like a clickable chip. Now it's a real <button class="chip
+   chip-action"> that opens the in-app panel — this resets the browser's own button
+   chrome so it reads identically to the <a>/<span> chips beside it; .chip above
+   already supplies the border/padding/colour/font every chip shares. */
+.chip-action {
+  appearance: none;
+  background: none;
+  line-height: inherit;
 }
 
 .chip:focus-visible {
@@ -940,6 +1005,85 @@ a.chip:focus-visible {
   }
 }
 
+/* --- Interaction-table panel (§22.2) --------------------------------------
+   Native <dialog>, shown via .showModal() — gives us backdrop, top-layer
+   stacking, and Escape-to-close for free, matching "click -> panel opens ->
+   rows -> close, no sorting/filtering/pagination/search." */
+
+.interaction-table-dialog {
+  width: min(640px, 92vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--sheet);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 1.75rem;
+}
+
+.interaction-table-dialog::backdrop {
+  background: rgba(20, 23, 26, 0.55);
+}
+
+.modal-intro {
+  color: var(--muted-paper);
+  max-width: 60ch;
+  margin: 0 0 1.25rem;
+}
+
+.interaction-table-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.interaction-table-row {
+  background: var(--sheet-sunk);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 0.9em 1em;
+}
+
+.interaction-table-pair {
+  font-family: var(--font-signal);
+  font-weight: 700;
+  font-size: 14px;
+  margin: 0 0 0.4em;
+}
+
+.interaction-table-summary {
+  margin: 0 0 0.5em;
+  max-width: 60ch;
+}
+
+.interaction-table-note {
+  color: var(--muted-paper);
+  margin: 0 0 0.5em;
+  max-width: 60ch;
+}
+
+.modal-close {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: var(--size-body);
+  padding: 0.6em 1.2em;
+  border-radius: 2px;
+  border: 1.5px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+}
+
+.modal-close:hover,
+.modal-close:focus-visible {
+  border-color: var(--ink);
+}
+
+.modal-close:focus-visible {
+  outline: 2px solid var(--source);
+  outline-offset: 2px;
+}
+
 /* --- Print (§17): "a bench needs paper" -----------------------------------
    Groups are force-opened and chips relabelled as numbered references by
    app.js's beforeprint/afterprint handlers (prepareForPrint/restoreAfterPrint)
@@ -961,6 +1105,14 @@ a.chip:focus-visible {
 
   .print-btn {
     display: none;
+  }
+
+  /* §22.2: the panel is a screen-only affordance — paper can't open a dialog.
+     A closed <dialog> already renders display:none by default; this just
+     guards the (unreachable in practice) case of printing while it's open. */
+  .interaction-table-dialog,
+  .interaction-table-link {
+    display: none !important;
   }
 
   /* Bench pane -> plain numbered protocol steps, no dark fill (§17). */

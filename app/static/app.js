@@ -10,7 +10,7 @@
 // not on retry, not on a source-chip click.
 
 import { parseSSEStream } from "./stream.js";
-import { renderBrief } from "./render.js";
+import { renderBrief, renderInteractionTable } from "./render.js";
 import { renderThread } from "./thread.js";
 
 const DEMO_PROTOCOL = `1. Prepare piranha solution by slowly adding 30 mL of 30% hydrogen peroxide to 90 mL of concentrated sulfuric acid in a glass beaker inside the fume hood.
@@ -30,6 +30,9 @@ const benchControlsEl = document.getElementById("bench-controls");
 const benchGutterEl = document.getElementById("bench-gutter");
 const benchStepsEl = document.getElementById("bench-steps");
 const printBtn = document.getElementById("print-btn");
+const interactionTableDialog = document.getElementById("interaction-table-dialog");
+const interactionTableBody = document.getElementById("interaction-table-body");
+const interactionTableClose = document.getElementById("interaction-table-close");
 
 const panels = {
   empty: document.getElementById("paper-empty"),
@@ -115,6 +118,7 @@ function render() {
         brief: state.brief,
         chemicalRecords: state.chemicalRecords,
         extractionDetail: state.extractionDetail,
+        onOpenInteractionTable: openInteractionTablePanel,
       });
       showOnly("receipt", "briefOutput");
       break;
@@ -129,6 +133,7 @@ function render() {
         brief: state.brief,
         chemicalRecords: state.chemicalRecords,
         extractionDetail: state.extractionDetail,
+        onOpenInteractionTable: openInteractionTablePanel,
       });
       showOnly("receipt", "incompleteBanner", "briefOutput");
       break;
@@ -487,6 +492,33 @@ function restoreAfterPrint() {
 window.addEventListener("beforeprint", prepareForPrint);
 window.addEventListener("afterprint", restoreAfterPrint);
 printBtn.addEventListener("click", () => window.print());
+
+// §22.2: the interaction-table panel — reachable from the no-data section's chip and
+// from each hazard card's "View the full interaction table" link (render.js wires
+// both to this same function). Fetched once and cached: it's static reference data,
+// identical for every brief, not something that needs refetching per open.
+let interactionMatrixCache = null;
+
+async function openInteractionTablePanel() {
+  if (!interactionMatrixCache) {
+    try {
+      const res = await fetch("/interaction-matrix");
+      interactionMatrixCache = res.ok ? await res.json() : [];
+    } catch {
+      interactionMatrixCache = [];
+    }
+    renderInteractionTable(interactionTableBody, interactionMatrixCache);
+  }
+  interactionTableDialog.showModal();
+}
+
+interactionTableClose.addEventListener("click", () => interactionTableDialog.close());
+// Native <dialog> click target is the dialog element itself when the click lands on
+// its backdrop area (outside the rendered content box) — close on that, not on any
+// click bubbling up from inside the panel's own content.
+interactionTableDialog.addEventListener("click", (event) => {
+  if (event.target === interactionTableDialog) interactionTableDialog.close();
+});
 
 protocolInput.addEventListener("input", updateReadButtonEnabled);
 demoBtn.addEventListener("click", () => {
