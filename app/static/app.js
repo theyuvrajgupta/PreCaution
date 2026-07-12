@@ -26,6 +26,7 @@ const appEl = document.getElementById("app");
 const protocolInput = document.getElementById("protocol-input");
 const demoBtn = document.getElementById("demo-btn");
 const readBtn = document.getElementById("read-btn");
+const brandHomeBtn = document.getElementById("brand-home");
 const benchControlsEl = document.getElementById("bench-controls");
 const benchGutterEl = document.getElementById("bench-gutter");
 const benchStepsEl = document.getElementById("bench-steps");
@@ -63,8 +64,10 @@ function setState(next) {
   // (§19.4). But that means whatever scroll position accumulated while the stage log
   // was streaming carries straight into the freshly-rendered brief — the thread would
   // open mid-stuck, below the fold, instead of at the top. A brief that just finished
-  // loading should always be seen from its own top.
-  if (next === "read" || next === "incomplete") {
+  // loading should always be seen from its own top. Same reasoning for landing back on
+  // "empty" — resetToEmpty() and the failed-panel's "load the demo" both go through
+  // here, and either could be triggered from deep in a scrolled-down brief.
+  if (next === "read" || next === "incomplete" || next === "empty") {
     window.scrollTo(0, 0);
   }
   render();
@@ -329,6 +332,15 @@ function freezeStageLogWithError() {
   panels.stageLog.appendChild(retryBtn);
 }
 
+// Home button (brand mark) needs to actually stop an in-flight run, not just hide its
+// eventual result — otherwise clicking it mid-"reading" would reset the screen while a
+// live Claude call and PubChem grounding kept running in the background, then silently
+// yank the user back to "read"/"failed" once it finished. AbortController cancels the
+// fetch; app/main.py's stream endpoint already handles a dropped client connection via
+// asyncio.CancelledError ("let it propagate so work stops") — this isn't new backend
+// behaviour, just the first thing on the frontend to actually use it.
+let activeAbortController = null;
+
 async function startReading() {
   const text = protocolInput.value;
   state.protocolText = text;
@@ -343,11 +355,13 @@ async function startReading() {
   let sawUnrecoverableError = false;
   let streamStarted = false; // did at least one real SSE event arrive? gates freeze-in-place vs the full failed panel
 
+  activeAbortController = new AbortController();
   try {
     const res = await fetch("/brief/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ protocol_text: text }),
+      signal: activeAbortController.signal,
     });
     if (!res.ok || !res.body) {
       const body = await res.json().catch(() => ({}));
@@ -409,6 +423,10 @@ async function startReading() {
       throw new Error(sawUnrecoverableError ? "The protocol could not be read." : "Stream ended unexpectedly.");
     }
   } catch (err) {
+    // A deliberate abort (home button, mid-run) is not a failure — resetToEmpty() has
+    // already put the screen back in "empty" and cleared the log; this run just needs to
+    // stop quietly, not report an error over top of a screen the user already left.
+    if (err instanceof DOMException && err.name === "AbortError") return;
     await log.whenDrained();
     state.lastError = err instanceof Error ? err.message : String(err);
     if (streamStarted) {
@@ -419,7 +437,39 @@ async function startReading() {
       state.failureKind = "error";
       setState("failed");
     }
+  } finally {
+    activeAbortController = null;
   }
+}
+
+// Home button (the brand mark) — resets the whole tool back to its first-load state.
+// Works from any state, including mid-"reading" (aborts the in-flight run first, see
+// startReading's activeAbortController). Every field state.js started with is put back,
+// not just the visible state — a fresh read after a reset must behave exactly like the
+// very first one, not carry anything over from whatever was on screen before.
+function resetToEmpty() {
+  activeAbortController?.abort();
+  activeAbortController = null;
+
+  protocolInput.value = "";
+  state.protocolText = "";
+  state.brief = null;
+  state.extractionDetail = null;
+  state.chemicalRecords = [];
+  state.lastError = null;
+  state.failureKind = "error";
+
+  clearChildren(panels.stageLog);
+  clearChildren(panels.receipt);
+  clearChildren(panels.incompleteBanner);
+  clearChildren(panels.briefOutput);
+  clearChildren(panels.failedPanel);
+  clearChildren(benchStepsEl);
+  clearChildren(benchGutterEl);
+
+  setState("empty");
+  updateReadButtonEnabled();
+  protocolInput.focus();
 }
 
 // §17: the brief has to leave the screen. Runs on the native print event
@@ -542,5 +592,6 @@ demoBtn.addEventListener("click", () => {
   protocolInput.focus();
 });
 readBtn.addEventListener("click", startReading);
+brandHomeBtn.addEventListener("click", resetToEmpty);
 
 render();

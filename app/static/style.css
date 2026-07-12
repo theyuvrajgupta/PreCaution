@@ -154,10 +154,25 @@ button:disabled {
   border-bottom: 1px solid var(--muted-paper);
 }
 
+/* Now a real <button> (was a <div>) — clicking it resets the whole tool, like a home
+   button. Reset native button chrome so it reads exactly as it did as a div; only
+   :focus-visible below is new. */
 .brand {
   display: flex;
   align-items: center;
   gap: 0.55em;
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.brand:focus-visible {
+  outline: 2px solid var(--source);
+  outline-offset: 3px;
+  border-radius: 2px;
 }
 
 /* The mark is the product's own onset-diamond glyph (.gutter-diamond) at logo
