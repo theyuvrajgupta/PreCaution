@@ -144,6 +144,19 @@ class SafetyNote(BaseModel):
     excerpts: list[SafetyExcerpt] = Field(default_factory=list)
 
 
+class FallbackHazardEntry(BaseModel):
+    """Phase 2: one entry in the hand-verified, offline fallback hazard table
+    (app/fallback_hazards.py) — hazard data for a biological reagent PubChem's
+    small-molecule database has no record for, sourced from a real supplier SDS,
+    never invented. See that module's docstring for the verification rule."""
+
+    canonical_name: str = Field(description="The name this entry renders under, e.g. 'trypsin'.")
+    cas_number: str | None = Field(default=None)
+    signal_word: str
+    hazard_statements: list[str] = Field(description="Verbatim from the cited SDS, not paraphrased.")
+    source: SourceRef
+
+
 class ChemicalHazardProfile(BaseModel):
     query_name: str = Field(description="The canonical_name that was looked up.")
     found: bool = Field(description="False if PubChem has no record at all for this name.")
@@ -163,6 +176,22 @@ class ChemicalHazardProfile(BaseModel):
         "PubChem 5xx after retries exhausted). Means hazard status is UNKNOWN, not confirmed absent — distinct "
         "from found=False with this field None, which is a definitive PubChem 'no record'. A network failure "
         "must never masquerade as 'this chemical doesn't exist'.",
+    )
+    not_small_molecule: bool = Field(
+        default=False,
+        description="Set only when found=False AND the query name matches a curated pattern for a known "
+        "protein/antibody/serum biologic (see app.pubchem._is_likely_protein). A correct, expected absence — "
+        "proteins aren't small molecules, PubChem's small-molecule database was never going to carry a record "
+        "for one — not a resolution miss. Deterministic pattern match against a hand-maintained list, never a "
+        "lookup, never used to ground any hazard claim.",
+    )
+    fallback_source: FallbackHazardEntry | None = Field(
+        default=None,
+        description="Phase 2: set only when found=False AND app.fallback_hazards has a hand-verified entry "
+        "for this name — PubChem genuinely has no record, but a real supplier SDS does. found stays False "
+        "(that is still an accurate fact about PubChem specifically); this field carries the alternate, "
+        "separately-cited hazard data. Never set when a live PubChem result exists — PubChem is always tried "
+        "first and this never overrides it.",
     )
 
 
@@ -184,6 +213,7 @@ BriefKind = Literal[
     "interaction_hazard",
     "interaction_no_data",
     "reactive_classification",
+    "not_small_molecule",
     "step_context",
     "limitation_disclosure",
     "no_data",

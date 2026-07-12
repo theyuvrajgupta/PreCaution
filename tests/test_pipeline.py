@@ -113,8 +113,21 @@ async def test_stream_pipeline_events_happy_path(monkeypatch):
     assert [m.data["name"] for m in chemical_msgs] == unique_names
     by_name = {m.data["name"]: m.data for m in chemical_msgs}
     for m in chemical_msgs:
-        assert set(m.data.keys()) == {"name", "cid", "found", "missing_sections", "chemical_ids", "concentration"}
+        assert set(m.data.keys()) == {
+            "name",
+            "cid",
+            "found",
+            "missing_sections",
+            "chemical_ids",
+            "concentration",
+            "grounding_error",
+            "not_small_molecule",
+            "fallback_source",
+        }
         assert m.data["chemical_ids"]  # every extracted chemical maps back to at least one id
+        assert m.data["grounding_error"] is None  # demo protocol chemicals all ground cleanly
+        assert m.data["not_small_molecule"] is False  # none of the demo protocol's chemicals are proteins
+        assert m.data["fallback_source"] is None  # all demo protocol chemicals ground via live PubChem
     # Concentration round-trips onto the SSE event exactly as extraction captured it.
     assert by_name["hydrogen peroxide"]["concentration"] == "30%"
     assert by_name["sodium azide"]["concentration"] == "0.02%"

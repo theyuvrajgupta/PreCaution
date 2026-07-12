@@ -157,6 +157,50 @@ def _chemical_statements(chemical: Chemical, profile: ChemicalHazardProfile) -> 
         return statements
 
     if not profile.found:
+        if profile.fallback_source is not None:
+            # Phase 2: PubChem genuinely has no record (found stays False, an accurate fact
+            # about PubChem specifically), but a real, hand-verified supplier SDS does. Reuses
+            # hazard_identity's kind/shape (this genuinely is a hazard classification, just
+            # from a different verified source) so it renders in the same GHS-classification
+            # slot as a PubChem result — but the citation chip points at the fallback source,
+            # never CID-shaped, and the text says explicitly that PubChem itself had nothing,
+            # so the fallback is never mistaken for a PubChem result.
+            fb = profile.fallback_source
+            statements.append(
+                BriefStatement(
+                    text=_cap(
+                        f"PubChem has no record for {chemical.canonical_name}"
+                        f"{f' (CAS {fb.cas_number})' if fb.cas_number else ''}. Hazard classification below is "
+                        f"from {fb.source.source_name}, not PubChem. "
+                        f'Signal word "{fb.signal_word}". ' + " ".join(_sentence(h) for h in fb.hazard_statements)
+                    ),
+                    kind="hazard_identity",
+                    source_ref=fb.source.source_name,
+                    source_url=fb.source.url,
+                    chemical_ids=[chemical.id],
+                    signal_word=fb.signal_word,
+                )
+            )
+            return statements
+        if profile.not_small_molecule:
+            # A correct, expected absence — proteins aren't small molecules, so PubChem's
+            # small-molecule database was never going to have a record. Reuses the gap
+            # card's visual container (§21's established pattern for "Not Chemically
+            # Reactive") with a distinct heading, so it reads as a classification, not a
+            # failure — never the same wording as a genuine resolution miss below.
+            statements.append(
+                BriefStatement(
+                    text=(
+                        f'"{chemical.canonical_name}" is a protein or antibody-based reagent, not a small '
+                        "molecule — no small-molecule hazard classification exists for it in PubChem, by "
+                        "design, not by omission. Consult its product datasheet or SDS for handling guidance."
+                    ),
+                    kind="not_small_molecule",
+                    source_ref="PubChem (not a small molecule)",
+                    chemical_ids=[chemical.id],
+                )
+            )
+            return statements
         statements.append(
             BriefStatement(
                 text=(

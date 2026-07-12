@@ -125,6 +125,9 @@ async def stream_pipeline_events(protocol_text: str) -> AsyncIterator[StreamMess
                 "missing_sections": profile.missing_sections,
                 "chemical_ids": chemical_ids,
                 "concentration": concentration,
+                "grounding_error": profile.grounding_error,
+                "not_small_molecule": profile.not_small_molecule,
+                "fallback_source": profile.fallback_source.source.source_name if profile.fallback_source else None,
             },
         )
         if profile.grounding_error is not None:

@@ -25,6 +25,7 @@ from urllib.parse import quote
 import httpx
 
 from app import cache as _cache
+from app import fallback_hazards
 from app.models import (
     ChemicalHazardProfile,
     GHSInfo,
@@ -106,14 +107,79 @@ def _get_json(url: str, params: dict | None = None) -> dict | None:
     raise RuntimeError(f"PubChem request failed after {_MAX_RETRIES} attempts: {url}") from last_exc
 
 
-def resolve_cid(name: str) -> int | None:
-    """Name -> CID via PUG-REST. Returns None if PubChem has no match."""
+def _resolve_cid_exact(name: str) -> int | None:
+    """Name -> CID via PUG-REST, exact string, no normalization or aliasing."""
     url = f"{PUG_REST_BASE}/compound/name/{quote(name)}/cids/JSON"
     data = _get_json(url)
     if data is None:
         return None
     cids = data.get("IdentifierList", {}).get("CID", [])
     return cids[0] if cids else None
+
+
+# Stage 1 extraction is instructed to strip concentration/physical-state qualifiers into
+# their own fields (prompts/extraction_system.md), so canonical_name is normally already
+# clean — confirmed against tests/fixtures/extraction_response.json ("hydrogen peroxide",
+# not "hydrogen peroxide (30%)"). This is a defensive fallback for the case where a
+# descriptor leaks through anyway (extraction is a model call, not a guarantee) — narrowly
+# scoped to numeric concentration patterns only, never generic words like "solution", which
+# risks stripping something load-bearing to the actual compound name.
+_LEADING_PERCENT_RE = re.compile(r"^\d+(\.\d+)?\s*%\s*")
+_TRAILING_PERCENT_PAREN_RE = re.compile(r"\s*\(\s*\d+(\.\d+)?\s*%\s*\)\s*$")
+_TRAILING_FORMAT_PAREN_RE = re.compile(
+    r"\s*\((concentrated|dilute|diluted|aqueous|anhydrous|solid|liquid)\)\s*$", re.IGNORECASE
+)
+
+
+def _normalize_for_lookup(name: str) -> str:
+    stripped = name.strip()
+    stripped = _LEADING_PERCENT_RE.sub("", stripped)
+    stripped = _TRAILING_PERCENT_PAREN_RE.sub("", stripped)
+    stripped = _TRAILING_FORMAT_PAREN_RE.sub("", stripped)
+    return stripped.strip()
+
+
+# Small, hand-verified alias table: canonical_name (lowercased, exact) -> a PubChem CID
+# that genuinely carries this compound's real hazard record, for names PubChem's own
+# exact-string name match misses despite the compound being well-documented. Every entry
+# is independently verified against PubChem before being added — never guessed. A wrong
+# mapping that grounds the wrong compound is worse than an honest miss, so this stays
+# small and conservative; extend deliberately, same verification each time.
+#
+# paraformaldehyde -> 712 (formaldehyde). Verified live 2026-07-13: PUG-REST
+# /compound/name/paraformaldehyde/ returns PUGREST.NotFound, but PubChem's OWN synonym
+# list for CID 712 already includes "Para-formaldehyde" (hyphenated) and "Paraformaldehyde
+# (JP17)" — both confirmed resolving to CID 712 via direct query. The bare unhyphenated
+# "paraformaldehyde" is simply not an exact-string match PUG-REST's endpoint catches,
+# not a case where PubChem lacks the substance. CID 712 carries real GHS data (confirmed
+# live: GHS Classification heading present, not a Fault). Paraformaldehyde (solid,
+# (CH2O)n) is the polymer that releases formaldehyde monomer in solution — exactly why 4%
+# paraformaldehyde fixative solutions are handled as a formaldehyde hazard in practice.
+_KNOWN_ALIASES: dict[str, int] = {
+    "paraformaldehyde": 712,
+}
+
+
+def resolve_cid(name: str) -> int | None:
+    """Name -> CID via PUG-REST, with two defensive fallbacks if the exact string doesn't
+    resolve: a normalized form (concentration/format descriptors stripped) and a small
+    hand-verified alias table (see _KNOWN_ALIASES). Tried in that order, each only
+    attempted if the previous one failed — a name that already resolves exactly (the
+    common case; Stage 1 extraction already strips descriptors) is completely unaffected
+    by the fallbacks, same request, same cache key, same result as before."""
+    cid = _resolve_cid_exact(name)
+    if cid is not None:
+        return cid
+
+    normalized = _normalize_for_lookup(name)
+    if normalized and normalized != name:
+        cid = _resolve_cid_exact(normalized)
+        if cid is not None:
+            return cid
+    else:
+        normalized = name
+
+    return _KNOWN_ALIASES.get(name.strip().lower()) or _KNOWN_ALIASES.get(normalized.strip().lower())
 
 
 def _fetch_heading(cid: int, heading: str) -> dict | None:
@@ -397,6 +463,30 @@ def get_safety_note(cid: int, heading: str) -> SafetyNote | None:
     return SafetyNote(heading=heading, excerpts=deduped)
 
 
+# Curated, hand-maintained: name patterns for common lab biologics (antibodies, serum,
+# immunoglobulins) that legitimately have no PubChem small-molecule record — proteins
+# aren't small molecules, so a miss here is a correct, expected absence, not a resolution
+# failure the way "paraformaldehyde" was. This is NOT a lookup and NOT a hazard source —
+# it only changes how a resolution miss is EXPLAINED to the user (never grounds a claim).
+# Deliberately narrow and conservative: a false positive would misclassify a genuine
+# unresolved hazard as "expected," so only names unambiguously describing a
+# protein/antibody/serum pattern match. Only consulted after CID resolution (exact,
+# normalized, alias) has already failed — never short-circuits a real lookup.
+_PROTEIN_PATTERNS = [
+    re.compile(r"\bantibod(y|ies)\b", re.IGNORECASE),
+    re.compile(r"\bantiserum\b", re.IGNORECASE),
+    re.compile(r"\bimmunoglobulin\b", re.IGNORECASE),
+    re.compile(r"\bIg[AGMDE]\b"),  # IgG/IgM/IgA/IgD/IgE — case-sensitive, standard usage
+    re.compile(r"\b(bovine serum albumin|bsa)\b", re.IGNORECASE),
+    re.compile(r"\balbumin\b", re.IGNORECASE),
+    re.compile(r"\bserum\b", re.IGNORECASE),
+]
+
+
+def _is_likely_protein(name: str) -> bool:
+    return any(p.search(name) for p in _PROTEIN_PATTERNS)
+
+
 def ground_chemical(canonical_name: str) -> ChemicalHazardProfile:
     """The main entry point: canonical chemical name -> full hazard profile.
 
@@ -413,7 +503,30 @@ def ground_chemical(canonical_name: str) -> ChemicalHazardProfile:
     try:
         cid = resolve_cid(canonical_name)
         if cid is None:
-            return ChemicalHazardProfile(query_name=canonical_name, found=False, missing_sections=["CID resolution"])
+            # Phase 2: PubChem (just exhausted above, including the Phase 1a normalization/
+            # alias fallbacks) is always tried first and always wins when it has a record —
+            # this fallback table is only ever consulted after a genuine PubChem miss. Real,
+            # sourced hazard data takes priority over the generic "protein, no small-molecule
+            # record" framing when both could apply (checked first, not merely first-listed).
+            # Same normalization fallback as resolve_cid (extraction occasionally leaves a
+            # stray concentration descriptor in canonical_name) — tries the raw name first,
+            # the normalized form second, still exact-match only, never fuzzy.
+            fallback = fallback_hazards.lookup(canonical_name) or fallback_hazards.lookup(
+                _normalize_for_lookup(canonical_name)
+            )
+            if fallback is not None:
+                return ChemicalHazardProfile(
+                    query_name=canonical_name,
+                    found=False,
+                    missing_sections=["CID resolution"],
+                    fallback_source=fallback,
+                )
+            return ChemicalHazardProfile(
+                query_name=canonical_name,
+                found=False,
+                missing_sections=["CID resolution"],
+                not_small_molecule=_is_likely_protein(canonical_name),
+            )
 
         profile = ChemicalHazardProfile(
             query_name=canonical_name,
