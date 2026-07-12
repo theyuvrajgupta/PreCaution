@@ -174,6 +174,8 @@ Open `http://127.0.0.1:8000`, paste a protocol or load the built-in demo, and cl
 
 ## Testing
 
+[![tests](https://github.com/theyuvrajgupta/PreCaution/actions/workflows/tests.yml/badge.svg)](https://github.com/theyuvrajgupta/PreCaution/actions/workflows/tests.yml) ![every hazard claim sourced](https://img.shields.io/badge/every_hazard_claim-sourced-brightgreen)
+
 ```bash
 pytest                    # excludes tests marked `costly` (real API spend)
 pytest -m costly          # opt into the costly (real API) tests

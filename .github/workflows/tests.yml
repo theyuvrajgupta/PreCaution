@@ -1,0 +1,24 @@
+name: tests
+
+# Runs the default (non-costly) test suite: the offline tier plus the free,
+# network-dependent PubChem integration tests. The `costly` tier (real Anthropic
+# API spend) is excluded by pytest.ini's `addopts = -m "not costly"`, so no
+# ANTHROPIC_API_KEY / secrets are needed here.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: pytest -q
