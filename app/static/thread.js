@@ -17,6 +17,22 @@ import { cap } from "./render.js";
 
 const UNVERIFIED_TIP = "Claude read this from the protocol text. It was not looked up. Verify the step attribution.";
 
+// Fix 2 (pre-recording polish pass): the row already carries the full tooltip above
+// (UNVERIFIED_TIP, revealed on hover/focus of the whole row via aria-describedby — the
+// UI_Design_Spec.md §6.1a/§9-locked copy, untouched). But the "ᴜɴᴠ" glyph itself was
+// aria-hidden and carried no title of its own — a cold reader has no way to decode three
+// unexplained letters without first discovering the row is interactive. This gives the
+// marker glyph its own independent title/aria-label so hovering or inspecting it directly
+// explains itself, without altering the existing row-level tooltip or its locked wording.
+const UNV_MARKER_TIP =
+  "Unverified: Claude's read of the protocol text, not a database lookup. The only claim in this brief marked this way.";
+
+// Fix 3: a compact, always-visible key for the gutter's visual language — the thread,
+// diamonds, and chemical-id tokens encode real meaning (§6.1) but were previously
+// explained only in the design spec, never on the page itself.
+const GUTTER_LEGEND =
+  "Gutter: line = chemical carried across steps · diamond = hazard onset · c1–c6 = chemical tokens.";
+
 function clearChildren(el) {
   while (el.firstChild) el.removeChild(el.firstChild);
 }
@@ -65,7 +81,11 @@ function buildStepRow(step, isLoadBearing) {
     const marker = document.createElement("span");
     marker.className = "mono unverified-marker";
     marker.textContent = "ᴜɴᴠ";
-    marker.setAttribute("aria-hidden", "true");
+    // Independently decodable on its own — not aria-hidden, carries its own title (mouse
+    // hover) and aria-label (screen readers get the label text instead of "u n v"). The
+    // row's own fuller tooltip (below) still exists unchanged for keyboard/focus users.
+    marker.title = UNV_MARKER_TIP;
+    marker.setAttribute("aria-label", UNV_MARKER_TIP);
     text.appendChild(marker);
     text.setAttribute("aria-describedby", tipId);
 
@@ -265,6 +285,12 @@ export function renderThread(gutterEl, stepsEl, { steps, statements }) {
   note.className = "mono bench-steps-note";
   note.textContent = "Step attribution is Claude's read of the protocol text, not a lookup.";
   stepsEl.appendChild(note);
+
+  // Fix 3: subtle, one line, placed once — not repeated per row, not a boxed panel.
+  const legend = document.createElement("p");
+  legend.className = "mono bench-steps-legend";
+  legend.textContent = GUTTER_LEGEND;
+  stepsEl.appendChild(legend);
 
   for (const step of steps) {
     stepsEl.appendChild(buildStepRow(step, loadBearingSteps.has(step.number)));

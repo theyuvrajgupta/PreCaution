@@ -47,6 +47,57 @@ function clearChildren(el) {
   while (el.firstChild) el.removeChild(el.firstChild);
 }
 
+// Fix 4 (pre-recording polish pass): same accessible-tooltip pattern already proven in
+// thread.js's unverified marker (aria-describedby, reveal on hover/focus, Escape to
+// dismiss) — generalised here for scan-layer jargon a biologist reader can't be assumed
+// to already know. Returns the tooltip element; caller appends it near `el`.
+let infoTipCounter = 0;
+function attachTooltip(el, tipText) {
+  const tipId = `info-tip-${++infoTipCounter}`;
+  const tip = document.createElement("span");
+  tip.id = tipId;
+  tip.className = "info-tip";
+  tip.setAttribute("role", "tooltip");
+  tip.hidden = true;
+  tip.textContent = tipText;
+
+  el.classList.add("jargon-term");
+  el.tabIndex = 0;
+  el.setAttribute("aria-describedby", tipId);
+  const show = () => {
+    tip.hidden = false;
+  };
+  const hide = () => {
+    tip.hidden = true;
+  };
+  el.addEventListener("mouseenter", show);
+  el.addEventListener("mouseleave", hide);
+  el.addEventListener("focus", show);
+  el.addEventListener("blur", hide);
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") hide();
+  });
+  return tip;
+}
+
+// Fix 4: a bare "CID 784" chip assumes the reader already knows what a CID is. Prefixed
+// display-only, at render time — the underlying source_ref data is untouched, and this
+// only ever matches the bare-CID shape, never a CAMEO/EU CLP/other source_ref (those are
+// sourced content and must render exactly as composed).
+function chipLabel(sourceRef) {
+  return /^CID \d+$/.test(sourceRef) ? `PubChem ${sourceRef}` : sourceRef;
+}
+
+// Presentation pass (2026-07-12, second round): "1, 2, and 3" — used by the scan-layer
+// locator line below. No existing equivalent in this file (app/brief.py has its own
+// Python-side _join_with_or for a different purpose; this is a small, self-contained JS
+// counterpart, "and" rather than "or").
+function joinWithAnd(items) {
+  if (items.length === 1) return String(items[0]);
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
 function formatStepRange(numbers) {
   if (!numbers || !numbers.length) return "";
   if (numbers.length === 1) return `Step ${numbers[0]}`;
@@ -58,7 +109,7 @@ function formatStepRange(numbers) {
 function renderChip(statement) {
   const el = statement.source_url ? document.createElement("a") : document.createElement("span");
   el.className = "chip mono";
-  el.textContent = statement.source_ref;
+  el.textContent = chipLabel(statement.source_ref);
   if (statement.source_url) {
     el.href = statement.source_url;
     el.target = "_blank";
@@ -78,7 +129,7 @@ function renderInteractionTableChip(onOpenInteractionTable) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "chip chip-action mono";
-  btn.textContent = "PreCaution interaction table";
+  btn.textContent = "preCaution interaction table";
   btn.addEventListener("click", () => onOpenInteractionTable());
   return btn;
 }
@@ -178,15 +229,6 @@ function renderControlLine(statement) {
 
 function renderScanLayer(brief, chemicalRecords, extractionDetail) {
   const hazards = brief.statements.filter((s) => s.kind === "interaction_hazard");
-  // "Checked, none matched" and "could not check at all" are different epistemic
-  // states (2026-07-11 pre-submission correctness check) — split so the scan layer
-  // never lumps them under one count, same distinction as the aggregate cards below.
-  const checkedGaps = brief.statements.filter(
-    (s) => s.kind === "interaction_no_data" && s.gap_status === "no_established_data"
-  ).length;
-  const uncheckableGaps = brief.statements.filter(
-    (s) => s.kind === "interaction_no_data" && s.gap_status === "insufficient_reactive_group_data"
-  ).length;
   const limitations = brief.statements.filter((s) => s.kind === "limitation_disclosure").length;
 
   // Item 4: "0 chemicals without hazard data" (counting !found) contradicted the body,
@@ -202,11 +244,56 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
   const el = document.createElement("div");
   el.className = "scan-layer rise-in";
 
-  const signal = document.createElement("p");
-  signal.className = "signal";
+  // Presentation pass (2026-07-12, second round): "OVERALL ASSESSMENT" invited exactly
+  // the misreading a bare DANGER headline already risked — a verdict on the whole
+  // protocol, not a pointer to specific findings. "AT A GLANCE" frames this block as a
+  // scannable overview (it also covers line2's grounding/PPE counts, which aren't
+  // interaction findings at all) rather than a grade.
+  const overallEyebrow = document.createElement("p");
+  overallEyebrow.className = "eyebrow";
+  overallEyebrow.textContent = "AT A GLANCE";
+  el.appendChild(overallEyebrow);
+
+  const hazardSteps = [...new Set(hazards.map((h) => Math.min(...(h.step_numbers || []))))].sort(
+    (a, b) => a - b
+  );
+
   if (hazards.length > 0) {
-    signal.style.color = "var(--danger)";
-    signal.textContent = "▰ DANGER";
+    // The severity word is bound to a readable count on the same line, at headline
+    // weight — a bare "DANGER" standing alone reads as a verdict on the entire
+    // protocol; "DANGER · N interaction hazards" grammatically points at a bounded,
+    // countable subject instead.
+    const row = document.createElement("div");
+    row.className = "scan-signal-row";
+
+    const verdict = document.createElement("span");
+    verdict.className = "signal scan-verdict";
+    verdict.style.color = "var(--danger)";
+    verdict.textContent = "▰ DANGER";
+
+    const count = document.createElement("span");
+    count.className = "scan-count";
+    count.textContent = `${hazards.length} interaction hazard${hazards.length === 1 ? "" : "s"}`;
+
+    row.append(verdict, count);
+    el.appendChild(row);
+
+    // Localizes the finding: "2 of 5 steps" is what answers "is this whole procedure
+    // dangerous?" — no. Onset steps, not each hazard's full persistence span (a hazard's
+    // step_numbers includes every step it's still co-present through via the hot thread,
+    // e.g. the piranha pair is [1,2,3,4,5] because it persists in the vessel — unioning
+    // that across hazards would wrongly say "steps 1-5 of 5", MORE alarming and LESS
+    // localized than today). Mirrors the onset logic thread.js already uses for diamonds.
+    if (hazardSteps.length > 0) {
+      const stepWord = hazardSteps.length === 1 ? "step" : "steps";
+      const verb = hazardSteps.length === 1 ? "carries" : "carry";
+      const locator = document.createElement("p");
+      locator.className = "scan-locator";
+      locator.textContent =
+        `${hazardSteps.length} of ${extractionDetail.steps} steps ${verb} an established ` +
+        `hazard: ${stepWord} ${joinWithAnd(hazardSteps)}.`;
+      el.appendChild(locator);
+    }
   } else {
     // Pre-submission correctness check, 2026-07-11: most protocols a Gladstone
     // researcher pastes will hit none of our 3 matrix entries, making this the
@@ -215,12 +302,12 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
     // literal phrase — an absence-of-finding headline, not a checked-and-found-
     // nothing one. Reworded, and paired with an explicit caveat line below so
     // this can never be misread as a safety claim.
+    const signal = document.createElement("p");
+    signal.className = "signal";
     signal.style.color = "var(--muted-paper)";
     signal.textContent = "▰ NO ESTABLISHED INTERACTION HAZARDS";
-  }
-  el.appendChild(signal);
+    el.appendChild(signal);
 
-  if (hazards.length === 0) {
     const caveat = document.createElement("p");
     caveat.className = "mono scan-line";
     caveat.style.color = "var(--muted-paper)";
@@ -228,37 +315,59 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
     el.appendChild(caveat);
   }
 
+  // The hazard count now lives in the headline row above — kept once, not repeated here
+  // (same dedup pattern as the receipt line).
   const line1 = document.createElement("p");
   line1.className = "mono scan-line";
-  line1.textContent =
-    `${hazards.length} interaction hazard${hazards.length === 1 ? "" : "s"} · ` +
-    `${extractionDetail.steps} steps · ${extractionDetail.chemicals} chemicals`;
+  line1.textContent = `${extractionDetail.steps} steps · ${extractionDetail.chemicals} chemicals`;
 
+  // Fix 4: "grounded", "PPE limitation", and "no GHS hazard classification" assume a
+  // chemist reader. Tooltipped in place rather than rephrased — the underlying terms
+  // ("grounding", "PPE") are used consistently elsewhere in the app (stage log, per-
+  // chemical rows) and are worth keeping recognisable, just explained on first read.
   const line2 = document.createElement("p");
   line2.className = "mono scan-line";
-  line2.textContent =
-    `${grounded} chemical${grounded === 1 ? "" : "s"} grounded · ` +
-    `${limitations} PPE limitation${limitations === 1 ? "" : "s"} · ` +
-    `${failedGrounding} chemical${failedGrounding === 1 ? "" : "s"} failed grounding · ` +
-    `${noGhs} chemical${noGhs === 1 ? "" : "s"} with no GHS hazard classification`;
 
-  const line2b = document.createElement("p");
-  line2b.className = "mono scan-line";
-  line2b.textContent = `${checkedGaps} pair${checkedGaps === 1 ? "" : "s"} checked against our reference set · none matched`;
+  const groundedTerm = document.createElement("span");
+  groundedTerm.textContent = "grounded";
+  const groundedTip = attachTooltip(groundedTerm, "Grounded = matched to a live PubChem record.");
 
-  el.append(line1, line2, line2b);
+  const limitTerm = document.createElement("span");
+  limitTerm.textContent = `PPE limitation${limitations === 1 ? "" : "s"}`;
+  const limitTip = attachTooltip(
+    limitTerm,
+    "A PPE limitation flags a chemical whose protective-equipment guidance is general, not glove-material-specific — see the notice attached to its PPE section below."
+  );
 
-  // Only shown when it applies — unlike the always-print-the-zero counts above, this
-  // is the rarer case (most grounded chemicals do carry reactive-group data), and the
-  // full distinction is never hidden regardless: it's always visible one section down
-  // as two separately-headed aggregate cards, never collapsed into one.
-  if (uncheckableGaps > 0) {
-    const line2c = document.createElement("p");
-    line2c.className = "mono scan-line";
-    line2c.textContent =
-      `${uncheckableGaps} pair${uncheckableGaps === 1 ? "" : "s"} could not be checked · reactive-group data unavailable`;
-    el.appendChild(line2c);
-  }
+  const failedTerm = document.createElement("span");
+  failedTerm.textContent = "grounding";
+  const failedTip = attachTooltip(failedTerm, "Grounded = matched to a live PubChem record.");
+
+  const noGhsTerm = document.createElement("span");
+  noGhsTerm.textContent = "no GHS hazard classification";
+  const noGhsTip = attachTooltip(noGhsTerm, "No GHS classification found in PubChem.");
+
+  line2.append(
+    `${grounded} chemical${grounded === 1 ? "" : "s"} `,
+    groundedTerm,
+    groundedTip,
+    ` · ${limitations} `,
+    limitTerm,
+    limitTip,
+    ` · ${failedGrounding} chemical${failedGrounding === 1 ? "" : "s"} failed `,
+    failedTerm,
+    failedTip,
+    ` · ${noGhs} chemical${noGhs === 1 ? "" : "s"} with `,
+    noGhsTerm,
+    noGhsTip
+  );
+
+  el.append(line1, line2);
+
+  // Fix 6: the "N pairs checked / N pairs could not be checked" counts used to repeat
+  // here AND in the dedicated "every other pair" section below —
+  // removed from the strip, kept once, in the section that already has room to explain
+  // what "checked" means and expand into the full list.
 
   const unresolved = extractionDetail.unresolved || 0;
   if (unresolved > 0) {
@@ -343,21 +452,38 @@ function renderNoDataSubgroup(label, gaps, aggregateHeading, chemicalNameById, o
   return group;
 }
 
-function renderNoDataSection(checked, uncheckable, chemicalNameById, onOpenInteractionTable) {
+// Presentation pass (2026-07-12, second round): nothing previously marked the transition
+// from the real findings (hazard cards) into this section — a reader could read it as
+// more of the same kind of thing, or miss that it's a different epistemic category
+// entirely (checked-and-clear vs. checked-and-hazardous). hasHazardsAbove gates BOTH the
+// divider rule and the framing sentence's opening clause, since the zero-hazard case has
+// nothing above this section to bridge from — a "those are the hazards" lead-in would be
+// false there, so it keeps the original, unbridged copy.
+function renderNoDataSection(checked, uncheckable, chemicalNameById, onOpenInteractionTable, hasHazardsAbove) {
   const wrap = document.createElement("div");
-  wrap.className = "no-data-section";
+  wrap.className = "no-data-section" + (hasHazardsAbove ? " has-divider" : "");
 
+  // "CHECKED — NO ESTABLISHED INTERACTION" claimed something false for half its own
+  // contents: this section holds both pairs that WERE checked (no match) and pairs that
+  // COULD NOT be checked (insufficient reactive-group data) — "checked" doesn't honestly
+  // describe the "could not be checked" subgroup. Neutral heading, same hasHazardsAbove
+  // gate as the framing sentence below ("other" only makes sense when there are hazard
+  // cards above to be other than).
   const heading = document.createElement("p");
   heading.className = "signal no-data-heading";
-  heading.textContent = "CHECKED — NO ESTABLISHED INTERACTION";
+  heading.textContent = hasHazardsAbove ? "EVERY OTHER PAIR" : "EVERY PAIR IN THIS PROTOCOL";
   wrap.appendChild(heading);
 
   const framing = document.createElement("p");
   framing.className = "no-data-framing";
-  framing.textContent =
-    "We checked these combinations against our reference data and found no established " +
-    "interaction. That is not the same as safe — it means no authoritative source in our set " +
-    "describes them. Treat with normal caution and consult the SDS.";
+  framing.textContent = hasHazardsAbove
+    ? "Those are the interaction hazards this protocol's checked data established. Everything " +
+      "below was checked against the same reference data — none showed an established " +
+      "interaction. That is not the same as safe: it means no authoritative source in our set " +
+      "describes them. Treat with normal caution and consult the SDS."
+    : "We checked these combinations against our reference data and found no established " +
+      "interaction. That is not the same as safe — it means no authoritative source in our set " +
+      "describes them. Treat with normal caution and consult the SDS.";
   wrap.appendChild(framing);
 
   if (checked.length) {
@@ -415,7 +541,9 @@ function renderInteractionSection(brief, chemicalRecords, onOpenInteractionTable
 
   for (const s of hazards) section.appendChild(renderHazardCard(s, onOpenInteractionTable));
   if (checked.length || uncheckable.length) {
-    section.appendChild(renderNoDataSection(checked, uncheckable, chemicalNameById, onOpenInteractionTable));
+    section.appendChild(
+      renderNoDataSection(checked, uncheckable, chemicalNameById, onOpenInteractionTable, hazards.length > 0)
+    );
   }
 
   return section;
@@ -497,6 +625,12 @@ function renderChemicalRow(record, brief, gloveState) {
     const badge = document.createElement("span");
     badge.className = "signal signal-badge signal-badge-" + hazardIdentity.signal_word.toLowerCase();
     badge.textContent = hazardIdentity.signal_word.toUpperCase();
+    // Fix 6: distinguish this from the app's own hazard labels (the plain-text DANGER on
+    // the overall banner and on interaction cards) — this one is PubChem's official GHS
+    // signal word, not a PreCaution-authored severity call. The pill shape/fill already
+    // differs visually from those plain-text labels; the tooltip makes the distinction
+    // explicit rather than relying on a reader noticing the shape difference.
+    badge.title = "GHS signal word — official hazard classification, from PubChem.";
     summary.appendChild(badge);
   }
   const cidEl = document.createElement("span");

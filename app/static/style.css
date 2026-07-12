@@ -204,7 +204,11 @@ button:disabled {
   }
 
   .scan-layer .signal {
-    font-size: 24px;
+    font-size: 18px;
+  }
+
+  .scan-verdict {
+    font-size: 18px;
   }
 }
 
@@ -276,6 +280,15 @@ button:disabled {
 .bench-steps-note {
   color: var(--muted-bench);
   margin: 0 0 1rem;
+}
+
+/* Fix 3 (pre-recording polish pass): the gutter's visual language (thread/diamond/
+   tokens) explained in one quiet, always-visible line — smaller than the note above it
+   so it reads as a caption, not a second heading. */
+.bench-steps-legend {
+  color: var(--muted-bench);
+  font-size: 10px;
+  margin: -0.6rem 0 1rem;
 }
 
 /* --- Carryover thread: gutter marks (§6.1) --------------------------------
@@ -398,6 +411,37 @@ button:disabled {
 }
 
 .unverified-tip[hidden] {
+  display: none;
+}
+
+/* Fix 4 (pre-recording polish pass): same tooltip visual language as .unverified-tip
+   above, generalised for scan-layer jargon terms ("grounded", "PPE limitation", "no GHS
+   hazard classification") that a non-chemist reader can't be expected to already know. */
+.jargon-term {
+  text-decoration: underline dotted var(--muted-paper);
+  text-underline-offset: 2px;
+  cursor: default;
+}
+
+.jargon-term:focus-visible {
+  outline: 2px solid var(--source);
+  outline-offset: 2px;
+}
+
+.info-tip {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--size-mono);
+  color: var(--ink);
+  background: var(--sheet-sunk);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 0.5em 0.7em;
+  margin-top: 0.3em;
+  max-width: 44ch;
+}
+
+.info-tip[hidden] {
   display: none;
 }
 
@@ -587,13 +631,43 @@ button:disabled {
   margin-bottom: 2rem;
 }
 
-/* The scan-layer verdict (DANGER / NO ESTABLISHED INTERACTION HAZARDS) is this
-   page's actual thesis once a brief exists — give it a real headline size,
-   not a slightly-large label. */
+/* Presentation pass (2026-07-12, second round): a bare "DANGER" headline still read as a
+   verdict on the whole protocol even after Fix 6 shrank it — the fix wasn't size, it was
+   that the word stood alone with nothing binding it to a bounded, countable finding. The
+   severity word now sits in a row next to a readable count (.scan-signal-row /
+   .scan-verdict / .scan-count), with a step-localized locator line underneath
+   (.scan-locator). The zero-hazard headline still uses plain .signal (no row, nothing to
+   bind it to). */
 .scan-layer .signal {
   display: block;
-  font-size: 30px;
+  font-size: 22px;
   margin-bottom: 0.3em;
+}
+
+.scan-signal-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  margin: 0 0 0.2em;
+}
+
+.scan-verdict {
+  display: inline-block;
+  font-size: 22px;
+}
+
+.scan-count {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--size-body);
+  color: var(--ink);
+}
+
+.scan-locator {
+  color: var(--ink);
+  margin: 0 0 0.5em;
+  max-width: 72ch;
 }
 
 .scan-line {
@@ -747,6 +821,16 @@ button:disabled {
    --gap (slate), never --danger: these are absence-of-finding, not findings. */
 .no-data-section {
   margin-top: 1.5rem;
+}
+
+/* Presentation pass (2026-07-12, second round): marks the transition from the real
+   hazard-card findings into this section, so it doesn't read as more of the same kind of
+   thing. Reuses the already-established .scope-boundary divider pattern (same rule +
+   spacing) rather than inventing new visual language. Only applied when there are hazard
+   cards above to divide from — see renderNoDataSection's hasHazardsAbove. */
+.no-data-section.has-divider {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
 }
 
 .no-data-heading {

@@ -160,9 +160,10 @@ window.addEventListener("resize", () => {
 });
 
 function renderReceipt() {
-  panels.receipt.textContent =
-    `Protocol read — ${state.extractionDetail.chemicals} chemicals · ` +
-    `${state.extractionDetail.steps} steps · ${state.brief.statements.length} statements`;
+  // Fix 6: chemicals/steps counts already appear in the scan layer's first line right
+  // below — kept once, there; the receipt now reports only what it uniquely carries.
+  // Fix 4: "statements" -> "sourced claims", legible to a non-chemist reader.
+  panels.receipt.textContent = `Protocol read — ${state.brief.statements.length} sourced claims`;
 }
 
 // Full exact copy per UI_Design_Spec.md §16.1 — this is intrinsic to what
@@ -217,7 +218,7 @@ function renderFailedPanel() {
 
   if (state.failureKind === "no_chemicals") {
     heading.textContent = "No chemicals identified.";
-    detail.textContent = "PreCaution reads chemical protocols; this doesn't look like one.";
+    detail.textContent = "preCaution reads chemical protocols; this doesn't look like one.";
 
     const demoOfferBtn = document.createElement("button");
     demoOfferBtn.type = "button";
