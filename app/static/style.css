@@ -408,13 +408,14 @@ button:disabled {
 }
 
 /* Omission-detection (Build_Spec.md §2e) — CHECK is a sibling to the Unverified
-   marker below, never a reuse of it. Same position/weight as the Vessel line just
-   above: full-contrast --muted-bench body text, not washed-out grey. The CHECK
-   word itself borrows --caution-bench (already used for GHS Warning signal words)
-   so it reads as "worth a look," not danger-red and not indistinguishable from
-   body text — no new color introduced. */
+   marker below, never a reuse of it. The CHECK body is a FINDING, not a machine
+   annotation: proportional body sans at full --ink-bench contrast, the same
+   treatment as the step text itself, so it stops reading as a dull grey footnote.
+   Only the CHECK tag stays in the machine-label register (mono, amber), like the
+   Vessel: label. The tag borrows --caution-bench (already used for GHS Warning
+   signal words) so it reads as "worth a look," not danger-red — no new color. */
 .bench-step-check {
-  color: var(--muted-bench);
+  color: var(--ink-bench);
   margin: 0.3em 0 0;
 }
 

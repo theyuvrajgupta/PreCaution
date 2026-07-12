@@ -168,7 +168,8 @@ function renderReceipt() {
   // below — kept once, there; the receipt now reports only what it uniquely carries.
   // Fix 4: "statements" -> "sourced claims", legible to a non-chemist reader.
   const line1 = document.createElement("p");
-  line1.textContent = `Protocol read — ${state.brief.statements.length} sourced claims`;
+  const claimCount = state.brief.statements.length;
+  line1.textContent = `Protocol read: ${claimCount} sourced claim${claimCount === 1 ? "" : "s"}`;
   panels.receipt.appendChild(line1);
 
   // Phase 3b: the credit half of the footer's restraint half ("Claude read the protocol.
@@ -179,7 +180,7 @@ function renderReceipt() {
   const line2 = document.createElement("p");
   line2.className = "receipt-credit";
   line2.textContent =
-    "Claude structured this protocol — its chemicals, steps, and vessels. Every hazard claim below is a deterministic lookup, not generated.";
+    "Claude structured this protocol: its chemicals, steps, and vessels. Every hazard claim below is a deterministic lookup, not generated.";
   panels.receipt.appendChild(line2);
 }
 
@@ -235,7 +236,9 @@ function renderFailedPanel() {
 
   if (state.failureKind === "no_chemicals") {
     heading.textContent = "No chemicals identified.";
-    detail.textContent = "preCaution reads chemical protocols; this doesn't look like one.";
+    // §16.2 honesty (Pass B6): state what preCaution actually knows — that it found no
+    // chemicals — never that the text "isn't a protocol," which it has no way to judge.
+    detail.textContent = "No chemicals were confidently identified in this text.";
 
     const demoOfferBtn = document.createElement("button");
     demoOfferBtn.type = "button";
@@ -379,8 +382,10 @@ async function startReading() {
         log.enqueue(() =>
           appendLogSubline(
             extractionBlock,
-            `↳ ${data.detail.chemicals} chemicals · ${data.detail.steps} steps · ` +
-              `${data.detail.mixtures} mixture(s) recognised · ${data.detail.unresolved} unresolved`
+            `↳ ${data.detail.chemicals} chemical${data.detail.chemicals === 1 ? "" : "s"} · ` +
+              `${data.detail.steps} step${data.detail.steps === 1 ? "" : "s"} · ` +
+              `${data.detail.mixtures} mixture${data.detail.mixtures === 1 ? "" : "s"} recognised · ` +
+              `${data.detail.unresolved} unresolved`
           )
         );
       } else if (event === "chemical") {
@@ -392,7 +397,7 @@ async function startReading() {
       } else if (event === "stage" && data.stage === "interactions" && data.status === "done") {
         log.enqueue(() => {
           const block = addLogBlock([`Checking ${data.detail.pairs_checked} co-present pairs against CAMEO…`]);
-          appendLogSubline(block, `↳ ${data.detail.hazards_found} hazard(s) found`);
+          appendLogSubline(block, `↳ ${data.detail.hazards_found} hazard${data.detail.hazards_found === 1 ? "" : "s"} found`);
         });
       } else if (event === "stage" && data.stage === "brief" && data.status === "done") {
         log.enqueue(() => {
@@ -519,7 +524,7 @@ function prepareForPrint() {
     const n = i + 1;
     chip.dataset.printLabel = chip.textContent;
     chip.textContent = `[${n}]`;
-    return `${n}. ${chip.dataset.printLabel} — ${chip.getAttribute("href")}`;
+    return `${n}. ${chip.dataset.printLabel} - ${chip.getAttribute("href")}`;
   });
 
   const list = document.createElement("div");

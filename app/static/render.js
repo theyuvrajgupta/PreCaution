@@ -21,6 +21,30 @@ export function cap(text) {
   return text ? text[0].toUpperCase() + text.slice(1) : text;
 }
 
+// Display-layer sanitization of a chemical name (Pass B4). Multi-part reagents
+// occasionally leak Stage-1 scratch-work into the name field —
+// "Phenol (25 parts (of 25:24:1 mixture))", "Ethanol (cold (temperature
+// qualifier, not concentration))" — where a nested parenthetical or a reasoning
+// note is really the model thinking out loud, not part of the name. Flatten those
+// away here, at render time only: the underlying data is untouched, and the durable
+// fix is Stage-1 prompt discipline, not this. Deliberately conservative so it never
+// mangles a legitimate name: it only drops a parenthetical that is itself nested, or
+// one that carries an explicit reasoning marker ("qualifier", ", not ..."). A plain
+// oxidation state like "iron(III) chloride" or a lone "(anhydrous)" is left alone.
+export function sanitizeName(name) {
+  if (!name) return name;
+  let out = name;
+  let prev;
+  do {
+    prev = out;
+    // An outer parenthetical containing another parenthetical is scratch-work — drop it whole.
+    out = out.replace(/\s*\([^()]*\([^()]*\)[^()]*\)/g, "");
+  } while (out !== prev);
+  // A lingering reasoning-style qualifier that leaked without nesting.
+  out = out.replace(/\s*\([^()]*(?:qualifier|,\s*not\b)[^()]*\)/gi, "");
+  return out.trim();
+}
+
 // §20.2: per-chemical safety-note excerpts are grouped by source/audience, not
 // dumped flat — a per-chemical wall of 50+ statements is the thing this
 // section exists to fix. Render order locked to the spec: NIOSH -> ERG ->
@@ -44,7 +68,7 @@ const GAP_HEADING = {
   // Phase 1b: also not a gap — a correct, expected absence (proteins aren't small
   // molecules) reusing the same quiet visual treatment, distinct heading so it never
   // reads as a resolution failure the way a genuine "no PubChem record" does.
-  not_small_molecule: "PROTEIN — NOT A SMALL MOLECULE",
+  not_small_molecule: "PROTEIN: NOT A SMALL MOLECULE",
 };
 
 function clearChildren(el) {
@@ -307,8 +331,8 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
       const locator = document.createElement("p");
       locator.className = "scan-locator";
       locator.textContent =
-        `${hazardSteps.length} of ${extractionDetail.steps} steps ${verb} an established ` +
-        `hazard: ${stepWord} ${joinWithAnd(hazardSteps)}.`;
+        `${hazardSteps.length} of ${extractionDetail.steps} step${extractionDetail.steps === 1 ? "" : "s"} ` +
+        `${verb} an established hazard: ${stepWord} ${joinWithAnd(hazardSteps)}.`;
       el.appendChild(locator);
     }
   } else {
@@ -336,7 +360,16 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
   // (same dedup pattern as the receipt line).
   const line1 = document.createElement("p");
   line1.className = "scan-line";
-  line1.textContent = `${extractionDetail.steps} steps · ${extractionDetail.chemicals} chemicals`;
+  // Pass B5 reconciliation: the chemical count is chemicalRecords.length — the exact
+  // list the per-chemical panel below renders and that line2's five states partition —
+  // NOT extractionDetail.chemicals (the raw Stage-1 mention count). The two disagreed on
+  // phenol-chloroform (7 counted here, 6 listed in the panel) because a non-grounded
+  // mention was counted but never got a panel row. Keying both off the same list makes
+  // them reconcile by construction. Singular/plural conditional on both counts.
+  const stepCount = extractionDetail.steps;
+  const chemCount = chemicalRecords.length;
+  line1.textContent =
+    `${stepCount} step${stepCount === 1 ? "" : "s"} · ${chemCount} chemical${chemCount === 1 ? "" : "s"}`;
 
   // Fix 4: "grounded", "PPE limitation", and "no GHS hazard classification" assume a
   // chemist reader. Tooltipped in place rather than rephrased — the underlying terms
@@ -361,7 +394,7 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
   limitTerm.textContent = `PPE limitation${limitations === 1 ? "" : "s"}`;
   const limitTip = attachTooltip(
     limitTerm,
-    "A PPE limitation flags a chemical whose protective-equipment guidance is general, not glove-material-specific — see the notice attached to its PPE section below."
+    "A PPE limitation flags a chemical whose protective-equipment guidance is general, not glove-material-specific. See the notice attached to its PPE section below."
   );
 
   const failedTerm = document.createElement("span");
@@ -376,7 +409,7 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
   noRecordTerm.textContent = "no PubChem record";
   const noRecordTip = attachTooltip(
     noRecordTerm,
-    "PubChem has no record under this name. Not a safety claim either way — verify the name or consult its SDS directly."
+    "PubChem has no record under this name. Not a safety claim either way: verify the name or consult its SDS directly."
   );
 
   line2.append(
@@ -410,7 +443,7 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
       proteinTerm.textContent = "protein (no small-molecule record)";
       const proteinTip = attachTooltip(
         proteinTerm,
-        "Proteins and antibodies aren't small molecules, so PubChem's small-molecule database doesn't cover them by design — this is expected, not a resolution miss."
+        "Proteins and antibodies aren't small molecules, so PubChem's small-molecule database doesn't cover them by design. This is expected, not a resolution miss."
       );
       parts.push(`${notSmallMolecule} `, proteinTerm, proteinTip);
     }
@@ -421,7 +454,7 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
       fallbackTerm.textContent = "hazard data from a non-PubChem source";
       const fallbackTip = attachTooltip(
         fallbackTerm,
-        "PubChem has no record for this chemical, but a hand-verified supplier SDS does — see its own citation below, distinct from PubChem."
+        "PubChem has no record for this chemical, but a hand-verified supplier SDS does. See its own citation below, distinct from PubChem."
       );
       parts.push(`${fallbackSourced} chemical${fallbackSourced === 1 ? "" : "s"} with `, fallbackTerm, fallbackTip);
     }
@@ -544,11 +577,11 @@ function renderNoDataSection(checked, uncheckable, chemicalNameById, onOpenInter
   framing.className = "no-data-framing";
   framing.textContent = hasHazardsAbove
     ? "Those are the interaction hazards this protocol's checked data established. Everything " +
-      "below was checked against the same reference data — none showed an established " +
+      "below was checked against the same reference data. None showed an established " +
       "interaction. That is not the same as safe: it means no authoritative source in our set " +
       "describes them. Treat with normal caution and consult the SDS."
     : "We checked these combinations against our reference data and found no established " +
-      "interaction. That is not the same as safe — it means no authoritative source in our set " +
+      "interaction. That is not the same as safe: it means no authoritative source in our set " +
       "describes them. Treat with normal caution and consult the SDS.";
   wrap.appendChild(framing);
 
@@ -602,7 +635,7 @@ function renderInteractionSection(brief, chemicalRecords, onOpenInteractionTable
 
   const chemicalNameById = new Map();
   for (const record of chemicalRecords) {
-    for (const id of record.chemical_ids) chemicalNameById.set(id, record.name);
+    for (const id of record.chemical_ids) chemicalNameById.set(id, sanitizeName(record.name));
   }
 
   for (const s of hazards) section.appendChild(renderHazardCard(s, onOpenInteractionTable));
@@ -689,7 +722,14 @@ function renderChemicalRow(record, brief, gloveState) {
   nameEl.className = "step-title";
   // Concentration is captured at extraction and shown here so it isn't silently
   // dropped — it never changes any hazard verdict (see README limitations).
-  nameEl.textContent = cap(record.concentration ? `${record.name} (${record.concentration})` : record.name);
+  // Sanitize the FULL composed label (name + concentration), not just the name: the
+  // Stage-1 scratch-work often rides in on the concentration field ("25 parts (of
+  // 25:24:1 mixture)"), which the display then wraps in its own parens, producing the
+  // nested-paren mess ("Phenol (25 parts (of 25:24:1 mixture))"). Sanitizing after
+  // composing catches it wherever it came from; a real concentration like "(3 M)" or
+  // "(0.02%)" has no nesting or reasoning marker, so it survives untouched.
+  const composedName = record.concentration ? `${record.name} (${record.concentration})` : record.name;
+  nameEl.textContent = cap(sanitizeName(composedName));
   summary.appendChild(nameEl);
   if (hazardIdentity && hazardIdentity.signal_word) {
     const badge = document.createElement("span");
@@ -700,7 +740,7 @@ function renderChemicalRow(record, brief, gloveState) {
     // signal word, not a PreCaution-authored severity call. The pill shape/fill already
     // differs visually from those plain-text labels; the tooltip makes the distinction
     // explicit rather than relying on a reader noticing the shape difference.
-    badge.title = "GHS signal word — official hazard classification, from PubChem.";
+    badge.title = "GHS signal word: official hazard classification, from PubChem.";
     summary.appendChild(badge);
   }
   // Phase 1b/2b: four distinct states — a genuine resolution miss ("no PubChem record")
@@ -714,7 +754,7 @@ function renderChemicalRow(record, brief, gloveState) {
   } else if (record.fallback_source) {
     cidEl.textContent = `${record.fallback_source} (not PubChem)`;
   } else if (record.not_small_molecule) {
-    cidEl.textContent = "protein — no small-molecule record";
+    cidEl.textContent = "protein: no small-molecule record";
   } else {
     cidEl.textContent = "no PubChem record";
   }

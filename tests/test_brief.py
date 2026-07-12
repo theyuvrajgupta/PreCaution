@@ -179,9 +179,10 @@ def test_precautionary_statement_resolves_known_p_codes():
     precautionary = [s for s in brief.statements if s.kind == "precautionary" and "hydrogen peroxide" in s.text]
     assert precautionary
     text = precautionary[0].text
-    # Known codes resolve to their official GHS text, not a bare code.
-    assert "P260 — Do not breathe dust/fume/gas/mist/vapours/spray." in text
-    assert "P280 — Wear protective gloves" in text
+    # Known codes resolve to their official GHS text, not a bare code. The code:text
+    # join is a colon, not an em dash (Pass B7: no em dashes in preCaution's own copy).
+    assert "P260: Do not breathe dust/fume/gas/mist/vapours/spray." in text
+    assert "P280: Wear protective gloves" in text
     # An unresolved code (not in our small demo-scoped table) falls back to the
     # bare code rather than inventing text — honest omission, not silently dropped.
     assert "P305+P351+P338" in text

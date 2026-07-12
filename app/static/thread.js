@@ -135,9 +135,9 @@ function buildStepRow(step, isLoadBearing, checkFlags) {
   // enforced in app/brief.py before this ever sees the flag, not here.
   for (const flag of checkFlags) {
     const check = document.createElement("p");
-    check.className = "mono bench-step-check";
+    check.className = "bench-step-check";
     const marker = document.createElement("span");
-    marker.className = "step-check-marker";
+    marker.className = "mono step-check-marker";
     marker.textContent = "CHECK";
     check.append(marker, ` · ${flag.text}`);
     row.appendChild(check);
@@ -333,10 +333,10 @@ export function renderThread(gutterEl, stepsEl, { steps, statements }) {
   // of a toll-gate — same two concrete facts (mixture resolution, vessel tracking), one
   // sentence instead of a wind-up clause plus a payoff clause.
   const note = document.createElement("p");
-  note.className = "mono bench-steps-note";
+  note.className = "bench-steps-note";
   note.textContent =
-    'Claude resolved "piranha" into its reagents and tracked each chemical\'s vessel across steps — ' +
-    "a structural read, not a lookup.";
+    "Claude resolved this protocol into its reagents and tracked each chemical's vessel across steps. " +
+    "A structural read, not a lookup.";
   stepsEl.appendChild(note);
 
   // Fix 3: subtle, one line, placed once — not repeated per row, not a boxed panel.

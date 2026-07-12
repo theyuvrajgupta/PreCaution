@@ -121,7 +121,7 @@ def _precautionary_text(canonical_name: str, codes: list[str]) -> str:
     parts = []
     for code in codes:
         resolved = resolve_precautionary_code(code)
-        parts.append(f"{code} — {resolved}" if resolved else code)
+        parts.append(f"{code}: {resolved}" if resolved else code)
     return f"Precautionary statements for {canonical_name}: " + " ".join(parts)
 
 
@@ -146,7 +146,7 @@ def _chemical_statements(chemical: Chemical, profile: ChemicalHazardProfile) -> 
             BriefStatement(
                 text=(
                     f'Could not complete PubChem grounding for "{chemical.canonical_name}" '
-                    f"({profile.grounding_error}). Hazard status is UNKNOWN — this is NOT a "
+                    f"({profile.grounding_error}). Hazard status is UNKNOWN. This is NOT a "
                     "confirmation the chemical is safe or absent. Retry when PubChem is "
                     "reachable, or consult its SDS directly."
                 ),
@@ -193,7 +193,7 @@ def _chemical_statements(chemical: Chemical, profile: ChemicalHazardProfile) -> 
                 BriefStatement(
                     text=(
                         f'"{chemical.canonical_name}" is a protein or antibody-based reagent, not a small '
-                        "molecule — no small-molecule hazard classification exists for it in PubChem, by "
+                        "molecule. No small-molecule hazard classification exists for it in PubChem, by "
                         "design, not by omission. Consult its product datasheet or SDS for handling guidance."
                     ),
                     kind="not_small_molecule",
@@ -287,8 +287,8 @@ def _chemical_statements(chemical: Chemical, profile: ChemicalHazardProfile) -> 
         statements.append(
             BriefStatement(
                 text=_cap(
-                    f"{chemical.canonical_name} — no {_join_with_or(short_labels)} data in PubChem. "
-                    "This does not mean it is hazard-free — consult its SDS directly."
+                    f"{chemical.canonical_name}: no {_join_with_or(short_labels)} data in PubChem. "
+                    "This does not mean it is hazard-free: consult its SDS directly."
                 ),
                 kind="no_data",
                 source_ref=cid_ref,
@@ -452,7 +452,7 @@ def _step_context_statement(step: Step, all_chemical_ids: list[str]) -> BriefSta
     return BriefStatement(
         text=" ".join(parts),
         kind="step_context",
-        source_ref="Extraction (Stage 1) — from protocol text, not independently grounded",
+        source_ref="Extraction (Stage 1): from protocol text, not independently grounded",
         unverified=True,
         step_numbers=[step.number],
         chemical_ids=all_chemical_ids,
@@ -469,7 +469,7 @@ def _unresolved_mention_statement(mention: str) -> BriefStatement:
             "Do not assume it is unimportant — check the original protocol text and consult its SDS if unsure."
         ),
         kind="unresolved_mention",
-        source_ref="Extraction (Stage 1) — Claude's read of the protocol text, not independently checked",
+        source_ref="Extraction (Stage 1): Claude's read of the protocol text, not independently checked",
         unverified=True,
     )
 
@@ -500,7 +500,7 @@ def _omission_flag_statement(
         source_ref = f"PubChem precautionary data for {', '.join(names)}" if names else "PubChem precautionary data"
     else:
         source_url = None
-        source_ref = "Claude's read of the protocol text — procedural completeness check, not independently grounded"
+        source_ref = "Claude's read of the protocol text: procedural completeness check, not independently grounded"
 
     return BriefStatement(
         text=flag.text,
