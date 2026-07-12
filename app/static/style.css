@@ -699,7 +699,15 @@ button:disabled {
   max-width: 72ch;
 }
 
+/* Type revamp (2026-07-13): same reasoning as .receipt above — these lines read as
+   counted sentences ("6 chemicals grounded · ..."), not identifier lists, so mono read
+   as a colder technical-readout tone than the words actually call for. Body font,
+   13px — still visibly quieter/smaller than a hazard card's 15px body text, so the scan
+   layer's own hierarchy (headline > locator > these counts) is unchanged, just the
+   typeface underneath it. */
 .scan-line {
+  font-family: var(--font-body);
+  font-size: 13px;
   color: var(--muted-paper);
   margin: 0 0 0.2em;
   max-width: 72ch;

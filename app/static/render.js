@@ -41,6 +41,10 @@ const GAP_HEADING = {
   // data) — but reuses the gap-card's quiet, non-hazard visual treatment since it's
   // still non-hazard content, distinct heading so it never reads as missing data.
   reactive_classification: "REACTIVE-GROUP CLASSIFICATION",
+  // Phase 1b: also not a gap — a correct, expected absence (proteins aren't small
+  // molecules) reusing the same quiet visual treatment, distinct heading so it never
+  // reads as a resolution failure the way a genuine "no PubChem record" does.
+  not_small_molecule: "PROTEIN — NOT A SMALL MOLECULE",
 };
 
 function clearChildren(el) {
@@ -234,12 +238,25 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
   // Item 4: "0 chemicals without hazard data" (counting !found) contradicted the body,
   // which correctly shows gap cards for chemicals that WERE found (a real PubChem
   // record, a real CID) but had specific sections missing — water, nitrogen, PBS were
-  // all `found`. Say the two distinct things separately, using the distinction the
-  // backend already makes: grounding_error (fetch failed, status genuinely unknown —
-  // see Brief.incomplete_chemicals) vs. a confirmed record with no GHS section.
-  const failedGrounding = brief.incomplete_chemicals.length;
+  // all `found`. Say the two distinct things separately.
+  //
+  // Phase 1c (2026-07-13): "grounded" used to be computed as total - failedGrounding,
+  // which silently counted a clean "no PubChem record" chemical (found=False,
+  // grounding_error=None — e.g. paraformaldehyde before the Phase 1a alias fix) as
+  // "grounded," while its own per-chemical row correctly showed a gap card. That's the
+  // contradiction this fix closes: five states, computed directly from chemicalRecords
+  // (not a mix of chemicalRecords and brief.incomplete_chemicals), mutually exclusive,
+  // always summing to extractionDetail.chemicals — grounded / fallback-sourced (Phase 2:
+  // real hazard data, just not from PubChem) / no record / protein (expected
+  // non-small-molecule absence) / failed grounding (network status unknown).
+  const grounded = chemicalRecords.filter((c) => c.found).length;
+  const failedGrounding = chemicalRecords.filter((c) => c.grounding_error).length;
+  const fallbackSourced = chemicalRecords.filter((c) => !c.found && c.fallback_source).length;
+  const notSmallMolecule = chemicalRecords.filter((c) => !c.found && !c.fallback_source && c.not_small_molecule).length;
+  const noRecord = chemicalRecords.filter(
+    (c) => !c.found && !c.fallback_source && !c.not_small_molecule && !c.grounding_error
+  ).length;
   const noGhs = chemicalRecords.filter((c) => (c.missing_sections || []).includes("GHS Classification")).length;
-  const grounded = extractionDetail.chemicals - failedGrounding;
 
   const el = document.createElement("div");
   el.className = "scan-layer rise-in";
@@ -309,7 +326,7 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
     el.appendChild(signal);
 
     const caveat = document.createElement("p");
-    caveat.className = "mono scan-line";
+    caveat.className = "scan-line";
     caveat.style.color = "var(--muted-paper)";
     caveat.textContent = "This is not a finding of safety. See below.";
     el.appendChild(caveat);
@@ -318,15 +335,23 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
   // The hazard count now lives in the headline row above — kept once, not repeated here
   // (same dedup pattern as the receipt line).
   const line1 = document.createElement("p");
-  line1.className = "mono scan-line";
+  line1.className = "scan-line";
   line1.textContent = `${extractionDetail.steps} steps · ${extractionDetail.chemicals} chemicals`;
 
   // Fix 4: "grounded", "PPE limitation", and "no GHS hazard classification" assume a
   // chemist reader. Tooltipped in place rather than rephrased — the underlying terms
   // ("grounding", "PPE") are used consistently elsewhere in the app (stage log, per-
   // chemical rows) and are worth keeping recognisable, just explained on first read.
+  //
+  // Trim pass (2026-07-13): "no PubChem record" moved here from its own line — it's the
+  // closest analog to the original "0 chemicals without hazard data" case this strip's
+  // "always print the zero" rule was built for (§21's audit), so it stays always-shown.
+  // "protein"/"fallback-sourced" did NOT get that history — they're narrow, newer
+  // categories whose zero is genuinely uninteresting when a protocol has no biologicals
+  // at all (e.g. the piranha demo will never touch either), so they're broken out below
+  // and only rendered when non-zero, instead of two permanent noise clauses.
   const line2 = document.createElement("p");
-  line2.className = "mono scan-line";
+  line2.className = "scan-line";
 
   const groundedTerm = document.createElement("span");
   groundedTerm.textContent = "grounded";
@@ -347,6 +372,13 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
   noGhsTerm.textContent = "no GHS hazard classification";
   const noGhsTip = attachTooltip(noGhsTerm, "No GHS classification found in PubChem.");
 
+  const noRecordTerm = document.createElement("span");
+  noRecordTerm.textContent = "no PubChem record";
+  const noRecordTip = attachTooltip(
+    noRecordTerm,
+    "PubChem has no record under this name. Not a safety claim either way — verify the name or consult its SDS directly."
+  );
+
   line2.append(
     `${grounded} chemical${grounded === 1 ? "" : "s"} `,
     groundedTerm,
@@ -359,10 +391,44 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
     failedTip,
     ` · ${noGhs} chemical${noGhs === 1 ? "" : "s"} with `,
     noGhsTerm,
-    noGhsTip
+    noGhsTip,
+    ` · ${noRecord} chemical${noRecord === 1 ? "" : "s"} with `,
+    noRecordTerm,
+    noRecordTip
   );
 
   el.append(line1, line2);
+
+  // Only rendered when at least one of these applies — see comment above line2.
+  if (notSmallMolecule > 0 || fallbackSourced > 0) {
+    const line2b = document.createElement("p");
+    line2b.className = "scan-line";
+    const parts = [];
+
+    if (notSmallMolecule > 0) {
+      const proteinTerm = document.createElement("span");
+      proteinTerm.textContent = "protein (no small-molecule record)";
+      const proteinTip = attachTooltip(
+        proteinTerm,
+        "Proteins and antibodies aren't small molecules, so PubChem's small-molecule database doesn't cover them by design — this is expected, not a resolution miss."
+      );
+      parts.push(`${notSmallMolecule} `, proteinTerm, proteinTip);
+    }
+
+    if (fallbackSourced > 0) {
+      if (parts.length) parts.push(" · ");
+      const fallbackTerm = document.createElement("span");
+      fallbackTerm.textContent = "hazard data from a non-PubChem source";
+      const fallbackTip = attachTooltip(
+        fallbackTerm,
+        "PubChem has no record for this chemical, but a hand-verified supplier SDS does — see its own citation below, distinct from PubChem."
+      );
+      parts.push(`${fallbackSourced} chemical${fallbackSourced === 1 ? "" : "s"} with `, fallbackTerm, fallbackTip);
+    }
+
+    line2b.append(...parts);
+    el.appendChild(line2b);
+  }
 
   // Fix 6: the "N pairs checked / N pairs could not be checked" counts used to repeat
   // here AND in the dedicated "every other pair" section below —
@@ -372,7 +438,7 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
   const unresolved = extractionDetail.unresolved || 0;
   if (unresolved > 0) {
     const line3 = document.createElement("p");
-    line3.className = "mono scan-line";
+    line3.className = "scan-line";
     line3.textContent = `${unresolved} mention${unresolved === 1 ? "" : "s"} not resolved to a chemical`;
     el.appendChild(line3);
   }
@@ -587,7 +653,11 @@ function renderChemicalRow(record, brief, gloveState) {
   const precautionary = own.filter((s) => s.kind === "precautionary");
   const safetyNotes = own.filter((s) => SAFETY_NOTE_KINDS.includes(s.kind));
   const gaps = own.filter(
-    (s) => s.kind === "no_data" || s.kind === "grounding_incomplete" || s.kind === "reactive_classification"
+    (s) =>
+      s.kind === "no_data" ||
+      s.kind === "grounding_incomplete" ||
+      s.kind === "reactive_classification" ||
+      s.kind === "not_small_molecule"
   );
 
   // §20.2: one collapsed row per chemical — collapsed by default so the brief stops
@@ -633,9 +703,21 @@ function renderChemicalRow(record, brief, gloveState) {
     badge.title = "GHS signal word — official hazard classification, from PubChem.";
     summary.appendChild(badge);
   }
+  // Phase 1b/2b: four distinct states — a genuine resolution miss ("no PubChem record")
+  // reads as a real gap; a protein/antibody correctly has no small-molecule record at all
+  // (expected, not a miss); a fallback-sourced chemical has real hazard data, just not
+  // from PubChem. None of these should read the same as each other.
   const cidEl = document.createElement("span");
   cidEl.className = "mono";
-  cidEl.textContent = record.found ? `CID ${record.cid}` : "no PubChem record";
+  if (record.found) {
+    cidEl.textContent = `CID ${record.cid}`;
+  } else if (record.fallback_source) {
+    cidEl.textContent = `${record.fallback_source} (not PubChem)`;
+  } else if (record.not_small_molecule) {
+    cidEl.textContent = "protein — no small-molecule record";
+  } else {
+    cidEl.textContent = "no PubChem record";
+  }
   summary.appendChild(cidEl);
   row.appendChild(summary);
 
