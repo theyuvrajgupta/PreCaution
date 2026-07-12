@@ -616,13 +616,42 @@ button:disabled {
   color: var(--danger);
 }
 
-/* --- Receipt (one-line summary once Read/Incomplete) --------------------- */
+/* --- Receipt (summary once Read/Incomplete) ------------------------------- */
 
+/* Type revamp (2026-07-13): this is a short sentence ("Protocol read — N sourced
+   claims"), not an identifier list — mono is reserved for CIDs/H-codes/chemical ids
+   (§5), and applying it to prose read as a technical-readout tone that didn't fit what
+   the line actually says. Body font, a size between mono's 12px and full body's 15px so
+   it still reads as secondary to the scan layer below it (§15's ranking), not as loud as
+   a paragraph. */
 .receipt {
-  font-family: var(--font-mono);
-  font-size: var(--size-mono);
+  font-family: var(--font-body);
+  font-size: 13px;
   color: var(--muted-paper);
   margin-bottom: 1.5rem;
+}
+
+.receipt p {
+  margin: 0;
+}
+
+/* Phase 3b, boxed (2026-07-13 revamp): this line shared --muted-paper with 40+
+   unrelated pieces of text (eyebrows, empty-state copy, stage-log sublines) and read as
+   more of the same grey, not a distinct credit. Reuses the gap-card's quiet container
+   language (--sheet-sunk fill, --line border, 2px radius — no shadow, no gradient, per
+   §3's anti-patterns) with a --source (provenance blue, not danger/caution) left accent,
+   since this line is itself about attribution. Full --ink, not muted, now that it's
+   visually contained — the box does the "this is secondary" work, the text doesn't also
+   need to whisper. */
+.receipt-credit {
+  margin-top: 0.6em !important;
+  max-width: 60ch;
+  background: var(--sheet-sunk);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--source);
+  border-radius: 2px;
+  padding: 0.6em 0.9em;
+  color: var(--ink);
 }
 
 /* --- Scan layer (§15 item 1, §23: the loudest thing on the page) ---------- */

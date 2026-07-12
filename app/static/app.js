@@ -160,10 +160,24 @@ window.addEventListener("resize", () => {
 });
 
 function renderReceipt() {
+  clearChildren(panels.receipt);
   // Fix 6: chemicals/steps counts already appear in the scan layer's first line right
   // below — kept once, there; the receipt now reports only what it uniquely carries.
   // Fix 4: "statements" -> "sourced claims", legible to a non-chemist reader.
-  panels.receipt.textContent = `Protocol read — ${state.brief.statements.length} sourced claims`;
+  const line1 = document.createElement("p");
+  line1.textContent = `Protocol read — ${state.brief.statements.length} sourced claims`;
+  panels.receipt.appendChild(line1);
+
+  // Phase 3b: the credit half of the footer's restraint half ("Claude read the protocol.
+  // Claude did not write the safety advice.") — near the top of the brief, not just the
+  // bottom, so a reader sees the division of labour before reading a single hazard claim,
+  // not only after. Keep this to one line: what Claude structured, not a restatement of
+  // every stage.
+  const line2 = document.createElement("p");
+  line2.className = "receipt-credit";
+  line2.textContent =
+    "Claude structured this protocol — its chemicals, steps, and vessels. Every hazard claim below is a deterministic lookup, not generated.";
+  panels.receipt.appendChild(line2);
 }
 
 // Full exact copy per UI_Design_Spec.md §16.1 — this is intrinsic to what

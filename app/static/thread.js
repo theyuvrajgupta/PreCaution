@@ -281,9 +281,18 @@ export function renderThread(gutterEl, stepsEl, { steps, statements }) {
 
   // §22: one quiet section-level note instead of marking every row — the
   // per-row marker is reserved for the load-bearing claim(s) only.
+  // Phase 3a: names what the reading actually did (resolving a named mixture into its
+  // reagents, tracking a chemical into a shared vessel across steps) rather than just
+  // saying "Claude read this" in the abstract — this structural read is Claude's one
+  // high-leverage job in the pipeline, and it was invisible in the UI before this.
+  // Trim pass (2026-07-13): three lines of prose before step 1 even starts was too much
+  // of a toll-gate — same two concrete facts (mixture resolution, vessel tracking), one
+  // sentence instead of a wind-up clause plus a payoff clause.
   const note = document.createElement("p");
   note.className = "mono bench-steps-note";
-  note.textContent = "Step attribution is Claude's read of the protocol text, not a lookup.";
+  note.textContent =
+    'Claude resolved "piranha" into its reagents and tracked each chemical\'s vessel across steps — ' +
+    "a structural read, not a lookup.";
   stepsEl.appendChild(note);
 
   // Fix 3: subtle, one line, placed once — not repeated per row, not a boxed panel.
