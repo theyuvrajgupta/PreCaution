@@ -1,289 +1,162 @@
-# PreCaution
+# preCaution
 
-**Procedure-aware lab safety brief generator.** Paste a written experimental protocol, get back a short, verifiable, experiment-specific safety brief — not another 80-page SDS dump.
+**Paste a written lab protocol. Get back a short, sourced, procedure-specific safety brief.**
+
+Not another 16-section SDS to read. preCaution reads the steps you actually plan to run and tells you what is dangerous about *this* procedure, with every hazard traced to a public database.
+
+> Claude read the protocol. Claude did not write the safety advice.
+
+![preCaution reading the locked demo protocol end to end: paste the protocol, watch the pipeline stream, get back a sourced brief](docs/img/demo.gif)
 
 ![The step-5 sodium azide hazard card, citing its NOAA CAMEO reactive-group source](docs/img/hazard-card-azide.png)
 
-*The step-5 hazard: sodium azide meeting sulfuric acid three steps and one waste carboy later — caught, cited, and traced straight to NOAA CAMEO.*
+*Sodium azide meets sulfuric acid three steps and one shared waste carboy later. Caught, cited, and traced to NOAA CAMEO. No inventory screener sees this, because the two chemicals are never named in the same sentence.*
 
-Built for the **Built with Claude: Life Sciences Hackathon** (Builder Track, "Build Beyond the Bench"), in partnership with the Gladstone Institutes.
+Built for the **Built with Claude: Life Sciences Hackathon** (Builder Track, "Build Beyond the Bench"), in partnership with the Gladstone Institutes. [MIT licensed](LICENSE).
 
-## What it is NOT
+---
 
-PreCaution is strictly a **defensive safety-checking tool**. It reads a procedure a scientist already plans to run and warns them about it — it does not design experiments, suggest chemical syntheses, or help make anything. It does not replace institutional EHS sign-off; it prepares a scientist to work safely and have a better-informed conversation with their safety officer.
+## Highlights
+
+- **Catches cross-step hazards, not just same-sentence mixing.** preCaution tracks each chemical across the whole procedure (`added` / `carried_over` / `residual`), so it flags a reagent meeting another one several steps and a vessel-transfer later, which single-sentence scanners miss entirely.
+- **Reads free-text protocols, not just clean numbered lists.** Paste a paragraph of bench notes. It segments the prose into steps first, then reads it. The messy protocol is exactly the one a newcomer never reasoned through, so it is the one that matters most.
+- **Every hazard verdict is grounded, not generated.** Interaction verdicts come from a hand-encoded NOAA CAMEO table. Per-chemical hazards come from PubChem. No safety verdict is written by a model.
+- **"No data" never means "safe."** A chemical with no hazard record and a chemical checked and found benign look different in the brief, cite different sources, and are never conflated.
+- **It says what the protocol left unsaid.** An advisory layer flags controls a step never mentions but the chemical's own safety data calls for, marked tentative and sourced to that chemical's record.
+- **Every claim carries a source, enforced by a test.** The build fails if any statement in the brief is missing a source reference.
+
+---
+
+## What it is, and is not
+
+preCaution is a **defensive safety-checking tool**. It reads a procedure a scientist already plans to run and warns them about it. It does not design experiments, suggest syntheses, or help make anything, and it does not replace institutional EHS sign-off. It prepares a scientist to work safely and to have a better-informed conversation with their safety officer.
+
+**Who it is for:** rotation students, new grad students, and new postdocs, constantly handed protocols they did not write, using chemicals they have never personally handled.
 
 ## The problem
 
-New researchers — rotation students, new grad students, new postdocs — are constantly handed protocols they didn't write, using chemicals they've never personally handled. The safety information they need already exists, but it's buried in 16-section Safety Data Sheets and 100+ page institutional manuals that nobody has time to map onto their specific procedure. Under time pressure, people guess or skip the check. The American Chemical Society names "poor planning and risk assessment of new experiments" as a top cause of academic lab incidents.
+The safety information a newcomer needs already exists, but it is buried in 16-section Safety Data Sheets and 100-plus-page institutional manuals that nobody has time to map onto their specific procedure. Under time pressure, people guess or skip the check. The American Chemical Society names poor planning and risk assessment of new experiments as a top cause of academic lab incidents.
 
 ## What it catches
 
-The repo ships with a locked demo protocol — a piranha-solution cleaning procedure, five steps, six chemicals — because it's small enough to read in ten seconds and still produces two real, differently-shaped hazards:
+The repo ships with a locked demo protocol, a piranha-solution cleaning procedure, five steps and six chemicals, small enough to read in ten seconds and still producing two real, differently-shaped hazards, plus the advisory layer in action.
 
-1. **Step 1 — direct mixing.** 30 mL of 30% hydrogen peroxide added to 90 mL of concentrated sulfuric acid, in the same sentence, same vessel. PreCaution flags it `DANGER`: explosive, gas-generating, toxic — CAMEO's own reactive-group prediction for Strong Oxidizing Agents meeting Strong Oxidizing Acids, with the plain-language note that this combination is commonly called "piranha solution."
-2. **Step 5 — the carryover catch, and the signature case.** The protocol never puts sodium azide and sulfuric acid in the same sentence. Step 1 adds sulfuric acid to a glass beaker; step 4 pours the spent piranha solution into the acid waste carboy; step 5 adds a sodium-azide-containing buffer rinse into that *same* carboy. PreCaution tracks each chemical's presence across steps (`added` / `carried_over` / `residual`) instead of only scanning single sentences, so it catches the azide meeting the acid three steps and one vessel-transfer later — and cites CAMEO's own documented example: sodium azide reacting with sulfuric acid evolves toxic, flammable hydrazoic acid gas.
-
-Every other co-present pair in the protocol — nine of them — gets checked against the same reference table and comes back either "checked, nothing established" or "couldn't be checked, no reactive-group data" — never silently skipped, never implied safe. See [The trust architecture](#the-trust-architecture) below for what "checked" actually means.
+1. **Step 1, direct mixing.** Concentrated hydrogen peroxide added to concentrated sulfuric acid, same sentence, same vessel. Flagged `DANGER`: CAMEO's own reactive-group prediction for a strong oxidizer meeting a strong oxidizing acid, with the plain-language note that this is commonly called piranha solution.
+2. **Step 5, the carryover catch.** The protocol never puts sodium azide and sulfuric acid in the same sentence. Step 1 puts sulfuric acid in a beaker, step 4 pours the spent solution into the acid-waste carboy, step 5 rinses a sodium-azide buffer into that *same* carboy. preCaution tracks each chemical across steps rather than scanning single sentences, so it catches the azide meeting the acid three steps later, and cites CAMEO's documented example: sodium azide plus sulfuric acid evolves toxic, flammable hydrazoic acid gas.
+3. **The advisory layer.** On top of the grounded verdicts, preCaution flags gaps: where a chemical's own safety data calls for a control the step does not mention (ventilation for methanol during fixation, a disposal route for a residual). These are marked `CHECK`, worded as "worth confirming," and are the one place the tool suggests rather than looks up. See [How the trust works](#how-the-trust-works).
 
 ![Both interaction hazards found in the demo protocol, plus the reframed no-data section below them](docs/img/interaction-section.png)
 
-## Architecture
+## How it works
 
-Four stages, one protocol in, one brief out. Claude appears in exactly one of them — Stage 1, reading the protocol text. Every stage after that is grounding and composition, not generation.
+Six stages, one protocol in, one brief out. Claude appears in three of them, all on the reading side. Every safety verdict is produced downstream by grounding and composition, not by a model.
 
 ```mermaid
 flowchart TD
     IN["Protocol text<br/>free-form paste"] --> S1
 
-    S1["Stage 1 — Extraction<br/>Claude · Anthropic API<br/>forced tool call<br/>app/extraction.py"]
-    S2["Stage 2 — Per-chemical grounding<br/>no model call<br/>PubChem PUG-REST / PUG-View<br/>app/pubchem.py"]
-    S3["Stage 3 — Interaction reasoning<br/>no model call<br/>local, hand-encoded CAMEO matrix<br/>app/interactions.py"]
-    S4["Stage 4 — Brief composition<br/>no model call · pure Python<br/>app/brief.py"]
-    OUT["Safety brief<br/>every claim sourced"]
+    subgraph READ["Reading · Claude turns text into structured state"]
+        direction TB
+        S1["Segmentation<br/>prose into discrete steps<br/>app/segmentation.py"]
+        S2["Extraction<br/>chemicals · steps · vessels<br/>app/extraction.py"]
+        S1 --> S2
+    end
 
-    S1 -->|chemicals + steps| S2
-    S1 -->|step / vessel model| S3
-    S2 -->|reactive groups| S3
-    S1 --> S4
-    S2 --> S4
-    S3 -->|pairwise findings| S4
-    S4 --> OUT
+    subgraph CORE["Safety verdicts · grounded · no model call"]
+        direction TB
+        S3["Per-chemical grounding<br/>PubChem PUG-REST / PUG-View<br/>app/pubchem.py"]
+        S4["Interaction verdicts<br/>hand-encoded NOAA CAMEO matrix<br/>app/interactions.py"]
+        S6["Brief composition<br/>pure Python<br/>app/brief.py"]
+    end
+
+    ADV["Omission check · CHECK<br/>advisory · Claude reasons here<br/>marked 'worth confirming'<br/>app/omissions.py"]
+
+    READ -->|structured protocol state| S3
+    READ --> S4
+    S3 --> S4
+    S3 --> S6
+    S4 --> S6
+    READ -.->|same structured state| ADV
+    S6 --> OUT["Safety brief<br/>every verdict sourced"]
+    ADV -.->|tentative flags| OUT
 
     classDef claudeStage fill:#fbe0e3,stroke:#ce0e2d,stroke-width:2px,color:#14171a
     classDef groundedStage fill:#e9ece9,stroke:#3d4644,stroke-width:1px,color:#14171a
+    classDef advisoryStage fill:#fdf3d9,stroke:#8a5a00,stroke-width:2px,color:#14171a,stroke-dasharray: 5 3
     classDef endpoint fill:#ffffff,stroke:#8e928d,stroke-width:1px,color:#14171a
 
-    class S1 claudeStage
-    class S2,S3,S4 groundedStage
+    class S1,S2 claudeStage
+    class S3,S4,S6 groundedStage
+    class ADV advisoryStage
     class IN,OUT endpoint
 ```
 
-## Provenance
+Claude reads and structures the protocol (segmentation and extraction) and reasons in one advisory layer (the CHECK omission flags). It does not write a single hazard verdict. The interaction cards and the per-chemical GHS data are looked up from real databases and do not depend on the model being right about chemistry. That is the claim the whole tool rests on, and it survives a rerun.
 
-Every claim in the brief traces back to one of three places — and only one of them is Claude's own judgment, marked as such rather than blended in with the other two.
+## How the trust works
 
-```mermaid
-flowchart LR
-    subgraph claims["What the brief claims"]
-        direction TB
-        CL1["Per-chemical hazard data<br/>GHS · PPE · first aid · disposal · storage"]
-        CL2["Pairwise interaction verdict"]
-        CL3["Which chemicals meet,<br/>in which step"]
-    end
+Hallucinated hazard data is the top reason scientists abandon AI safety tools, so nothing here is left to a model's memory. The dividing line is not how many times Claude is called. It is where each claim comes from.
 
-    subgraph sources["Where it's checked"]
-        direction TB
-        SRC1["PubChem<br/>PUG-REST / PUG-View"]
-        SRC2["NOAA CAMEO Chemicals<br/>hand-encoded local matrix,<br/>fetched + quoted at build time"]
-        SRC3["Claude's read of the protocol text<br/>not independently re-verified<br/>rendered as [unverified] in the brief"]
-    end
+| What the brief claims | Where it comes from | Who decides it |
+| --- | --- | --- |
+| Per-chemical hazards (GHS, PPE, first aid, disposal, storage) | PubChem (PUG-REST, PUG-View), linked per record | Database. Claude only resolves the name to look up. |
+| Pairwise interaction verdict | Hand-encoded NOAA CAMEO matrix, fetched and quoted at build time | Lookup table. No model call. |
+| Which chemicals meet, in which step | Claude's read of the protocol, marked `unverified` in the brief | Claude. Disclosed, not blended in. |
+| Omission flags (`CHECK`) | Each chemical's own PubChem safety data, surfaced by Claude, marked "worth confirming" | Claude reasons; the data it points at is sourced. Advisory only. |
 
-    CL1 --> SRC1
-    CL2 --> SRC2
-    CL3 --> SRC3
+The first two rows are grounded and do not vary. The last two are Claude's reading, and are labeled as such wherever they appear. In particular, the `CHECK` layer is the one place the model reasons rather than looks up, so its flags are prompts to confirm, not settled findings, and their exact wording and coverage can vary between runs. That is by design, not a defect: it is why they wear the tentative marker instead of being dressed up as verdicts.
 
-    classDef grounded fill:#e9ece9,stroke:#144e6b,stroke-width:1.5px,color:#14171a
-    classDef judgment fill:#fdf3d9,stroke:#8a5a00,stroke-width:2px,color:#14171a,stroke-dasharray: 5 3
+**"No data" is not "safe," and the tool shows the difference.** Water and phosphate-buffered saline both show no signal word and no pictogram, so at a glance they look identical. They are not the same absence. Water carries a real GHS record sourced to the European Chemicals Agency, "Not Classified," a positive, checkable finding of non-hazard from a named regulatory body. PBS has no GHS record in PubChem at all, never checked. The brief cites these differently and expands them into different content. Water is classified and benign; PBS is unclassified. The tool knows the difference and shows its work for both.
 
-    class SRC1,SRC2 grounded
-    class SRC3 judgment
-```
+**The final brief is pure composition, zero Claude calls.** `build_brief()` copies already-fetched fields into rendered statements. It does not select, rank, or write. With no generation step in the render path, there is no mechanism by which an ungrounded claim could enter the brief.
 
-## The trust architecture
+<details>
+<summary><b>Bugs found while building it</b></summary>
 
-Hallucinated hazard data is the top reason scientists abandon AI safety tools, so nothing here is left to a model's memory:
+Two of these are trust-architecture failures: the citation was real and the data was genuinely sourced, but the composition around it was still wrong.
 
-- **Per-chemical hazards** — resolved via [PubChem](https://pubchem.ncbi.nlm.nih.gov/) (PUG-REST for name → CID, PUG-View for GHS classification, PPE, first aid, and disposal/storage guidance). Every hazard links to its PubChem record.
-- **Interaction verdicts** — never free-form model output. Claude identifies which chemicals meet in which step; each chemical's reactive-group classification is pulled live from PubChem (itself sourced from [NOAA CAMEO Chemicals](https://cameochemicals.noaa.gov/)); the actual danger verdict for a given pair of reactive groups comes from a compact, hand-encoded table built directly from CAMEO's own reactive-group datasheets — every entry fetched and quoted at build time, never from a model's general chemistry knowledge. PubChem is the only live dependency.
-- **Missing data is never silent.** If no authoritative hazard data exists for a chemical, the brief says so explicitly rather than implying it's safe.
-- **The final brief (Stage 4) is pure composition — zero Claude calls.** `build_brief()` copies already-fetched fields into rendered statements; it doesn't select, rank, or write anything. This is a deliberate design decision, not a cost shortcut: with no generation step in the render path, there is no mechanism by which an ungrounded claim could enter the brief.
+1. **The failure state that could never fire.** `ground_chemical()` originally let a PubChem outage crash the whole run. That meant the "incomplete brief" banner, whose entire purpose is to stop a partial brief from looking complete, was unreachable in practice: the one state that most needed to survive a failure was destroyed by that failure. Found by building the failure state, not by code review. Fixed by isolating a grounding failure to the single chemical instead of the run.
+2. **The GHS multi-notifier merge.** PubChem holds independent GHS submissions from multiple notifiers per compound. Pulling statements from all of them produced a merged, internally-contradictory hazard list credited to "PubChem" as if it were one source. Fixed by matching PubChem's own display behavior and citing the primary notifier by name.
+3. **The caption that lied on every protocol but one.** The left-panel caption was hardcoded to the demo protocol's name and printed it on every input. It survived roughly 70 automated test runs, because the test fixture *is* the demo protocol, so a hardcoded value and a correct one are byte-for-byte identical whenever the input is the demo. The bug was only visible on a non-demo protocol, and nothing asserted the caption against one. The lesson outlived the fix: any value hardcoded to the demo is invisible to demo-based tests, so every user-visible field now needs at least one assertion against a non-demo fixture.
+4. **Mojibake.** Some of PubChem's own response bytes were double-UTF-8-encoded at the source, confirmed by inspecting raw bytes, and rendered as garbled characters. Root-caused and reversed deterministically.
 
-**"No data does not mean safe" is tested, not just stated, on the two least interesting
-chemicals in the demo protocol.** Water and phosphate-buffered saline both show no signal
-word and no pictogram in the brief — at a glance, identical. They are not the same kind of
-absence. Water carries a real GHS Classification record, sourced to the European Chemicals
-Agency (EC 231-791-2): "Not Classified," based on 1866 of 1876 self-reporting companies
-finding no GHS hazard — a positive, checkable finding of non-hazard from a named regulatory
-body. Phosphate-buffered saline has no GHS record in PubChem at all — not "checked and found
-safe," just never checked. The brief cites these differently and expands into different
-content: water gets its own GHS Classification panel with the ECHA citation; PBS gets a gap
-card that names GHS classification explicitly as one of the sections with no data, right next
-to the standing disclaimer that absence is never evidence of safety. Water is classified and
-benign; PBS is unclassified. The tool knows the difference and shows its work for both.
+</details>
 
-**What's grounded, precisely — not a blanket claim.** "Looked up, not generated" is true for per-chemical hazard data (Stage 2) and for the pairwise danger verdict itself (Stage 3, the matrix lookup). It is *not* true for Stage 1: which chemicals a protocol mentions, and which pairs even get checked, is Claude reading the protocol text, and isn't independently re-verified. The brief marks these step-attribution claims `unverified` rather than blurring the line — see the first item under Limitations for why this is the largest gap in the method, not a footnote.
+<details>
+<summary><b>Known limitations</b></summary>
 
-**A finding worth stating plainly: even the authoritative PPE data isn't calibrated for the
-reader.** PubChem's PPE guidance for a chemical often blends multiple source documents — the
-NIOSH Pocket Guide (occupational exposure) and the DOT Emergency Response Guidebook (hazmat
-first responders at a *transport incident*: self-contained breathing apparatus, structural
-firefighting gear). Our named user is a rotation student in a fume hood, not a hazmat responder
-at a spill. PreCaution groups PPE guidance by which of these it came from and who it's actually
-written for, rather than presenting it as one undifferentiated block — but the underlying gap
-(no PPE dataset calibrated specifically for a bench scientist) is real, and disclosing it is the
-more honest choice than pretending the data fits perfectly.
+These are properties of the method, the honest bill for what "looked up, not generated" does and does not cover.
 
-## Bugs found while building it
+1. **Which pairs get checked is not grounded, the largest limitation.** Every verdict is a real lookup, but the *set of pairs* looked up comes from Claude reading the protocol. A pair Claude never constructs is never evaluated, and nothing downstream would notice. Marked `unverified` in the brief.
+2. **The advisory `CHECK` layer is not deterministic.** It is a model reasoning about gaps, so its flags can vary in wording and coverage across identical reruns. It is intentionally the tentative tier and prefers a missed flag to a false one. It is never presented as a verdict.
+3. **Concentration is shown but never changes a verdict.** The azide-plus-acid hazard flags identically whether the carboy holds a trace or solid.
+4. **Order of addition is not modeled.** Reverse the demo's peroxide-into-acid to the dangerous order and the brief is unchanged.
+5. **No model of consumption.** Spent piranha is treated as holding its original reagents. Errs toward over-warning, the right direction for a safety tool.
+6. **The matrix flags a dangerous reaction class, not this specific reaction.** Temperature is not modeled.
+7. **The matrix is pairwise.** NOAA's own docs note pairwise prediction cannot anticipate three-substance interactions, and step 5's carboy has three.
+8. **It only knows what this protocol puts in a vessel,** not what a shared waste container already held.
+9. **The interaction matrix is a seed set, currently four entries.** Three cover the demo's reactive-group pairs; a fourth (basic salts meeting strong oxidizing acids, e.g. bleach and sulfuric acid) was hand-authored from CAMEO's documentation. Paste a different protocol and most pairs return `no_established_data`, surfaced honestly, never implied safe.
 
-Two of these are trust-architecture failures: the citation was real and the data was
-genuinely sourced, but the composition or aggregation step around it was still wrong. The
-third is a rendering defect — kept here for completeness, but it isn't the same kind of
-thing, and everything it touched was still correctly attributed underneath the garbled text.
+</details>
 
-1. **The failure state that could never fire.** `ground_chemical()` originally let a
-   PubChem outage propagate and crash the entire pipeline run. That meant `Brief.incomplete`
-   — and the "This brief is incomplete" banner, whose entire purpose is to stop a partial
-   brief from silently looking complete — was unreachable in practice: the one state that
-   most needed to survive a real failure was itself destroyed by that failure. Found by
-   building the failure state, not by a code review. Fixed by isolating a grounding failure
-   to the one chemical (`ChemicalHazardProfile.grounding_error`) instead of letting it take
-   the run down; `tests/test_pubchem.py::test_ground_chemical_survives_pubchem_outage` locks
-   it in.
-2. **The GHS multi-notifier merge.** PubChem holds independent GHS classification
-   submissions from multiple notifiers per compound — sodium azide alone carries several.
-   Pulling hazard statements from all of them produced a merged, internally-contradictory
-   hazard list credited to "PubChem" as if that were one source. Fixed by matching
-   PubChem's own display behavior (its UI shows only the primary notifier by default) and
-   citing that notifier by name — for sodium azide that's *Regulation (EC) No 1272/2008*
-   (EU CLP), not a generic label. The same species of bug as the interaction-matrix
-   chlorates issue below, caught earlier in the build: a citation can be real and
-   technically sourced and still misrepresent the claim, if the step composing it merges
-   or substitutes across sources.
-3. **Mojibake.** Some of PubChem's own HTTP response bytes were double-UTF-8-encoded at
-   the source — confirmed by inspecting the raw bytes, not guessed — and rendered as
-   garbled bullet characters in PPE/first-aid excerpts. Root-caused and reversed
-   deterministically once the actual byte pattern was identified.
+<details>
+<summary><b>Roadmap: designed, deliberately not built</b></summary>
 
-## Known limitations
+- **Agentic build-time matrix extender.** An agent that fetches a new CAMEO datasheet and proposes a matrix entry with its source quote attached, to a human for review before it is added. Keeps the "fetched and quoted, not recalled" rule intact while the matrix grows past its seed set.
+- **Byproduct grounding.** A reaction byproduct (hydrazoic acid) has its own CID and could be grounded the same way its precursors are.
+- **Glove-material recommendations, rejected on the merits.** Breakthrough data lives with manufacturers, not in any free structured database, and OSHA warns published times can be optimistic. Showing where the data stops is more honest than guessing a material.
+- **Reagent substitution, also rejected on the merits.** Substitution requires knowing what the reagent is *for*, and a newcomer, this tool's user, cannot safely judge whether a swap preserves the experiment. Suggesting one would be a new risk the tool created.
 
-These are properties of the method, not defects — the honest bill for what "looked up, not
-generated" does and doesn't cover.
+</details>
 
-1. **Which pairs get checked is not grounded — the largest limitation in the product.**
-   Every hazard verdict is a real lookup, but the *set of pairs that get looked up* comes
-   from Stage 1: Claude reading the protocol text to decide which chemicals are co-present
-   in which step. A pair Claude never constructs is never evaluated by any downstream
-   stage, and nothing downstream would notice. The brief marks step-attribution
-   `unverified` rather than hiding this, but that's a disclosure, not a fix — Stage 2/3 can
-   independently re-derive a hazard verdict from a CID; nothing independently re-derives
-   the pair set. See Roadmap.
-2. **Concentration is captured and shown, but never changes a verdict.** The demo protocol
-   specifies 0.02% sodium azide in buffer — PreCaution now names it next to the chemical
-   wherever it's mentioned (e.g. "sodium azide (0.02%)"), so it's no longer silently
-   dropped. But the azide-plus-acid hazard is still flagged identically whether the carboy
-   holds a 0.02% trace or solid NaN₃: `Chemical.concentration` is displayed, not read by
-   any hazard logic — no concentration-threshold data is grounded for that.
-3. **Order of addition is not modeled.** The demo protocol correctly adds peroxide to
-   acid. Reverse it — the dangerous order, and a real mistake newcomers make — and
-   PreCaution produces the same brief: the interaction matrix keys off which reactive
-   groups are co-present in a step, not which chemical entered first. See Roadmap.
-4. **No model of consumption.** Spent piranha solution is called "spent" because the
-   peroxide has largely reacted away, but the `carried_over` origin model has no concept of
-   a reagent being consumed — step 4's carboy is treated as holding the original reagents.
-   This errs toward over-warning, the correct direction for a safety tool, but it's a
-   simplification, not a physical model. See Roadmap.
-5. **The interaction matrix flags a dangerous reaction *class*, not this specific
-   reaction.** Temperature isn't modeled either — all of it matters for the real piranha
-   reaction, and none of it reaches the verdict.
-6. **Glove material can't be grounded per compound.** PubChem's PPE guidance is general;
-   OSHA warns published glove breakthrough-time data can understate real breakthrough. The
-   brief discloses this limit rather than guessing a specific glove material.
-7. **The interaction matrix is pairwise.** NOAA's own CAMEO documentation notes pairwise
-   prediction can't anticipate how three or more substances react together — and the demo
-   protocol's step 5 carboy has three (spent piranha + sodium azide waste). The two
-   verdicts the brief gives for that step are each individually sourced and correct; the
-   method has a documented blind spot at exactly that moment.
-8. **PreCaution only knows what *this protocol* puts into a vessel.** It has no way to
-   know what a shared waste container already held before this procedure started.
-9. **A matrix entry's documented example is a curated judgment call, not an automated
-   rule.** CAMEO's reactive-group pages publish a couple of worked examples per group pair,
-   not one per member, and telling "this example is about your chemicals" from "this
-   example is about a different member of the same group, with yours as the passive
-   partner" isn't decidable by checking whether a chemical's name appears in the sentence.
-   The chlorates example names sulfuric acid, which *is* present, but documents a different
-   oxidizer; the azide example names nitric acid, which is *not* present, but is genuinely
-   about sodium azide and sulfuric acid. Neither "quote it if a present chemical is named"
-   nor "require every named chemical to be present" gets both right. Each matrix entry
-   hand-records which chemicals its example actually requires at the time the entry is
-   written; the tests are regression locks on those entries, not a mechanism that evaluates
-   new ones. The roadmap's agentic matrix extender proposes entries for human review for
-   exactly this reason.
-10. **The matrix currently has four entries.** Three cover the locked demo protocol's
-    reactive-group pairs (oxidizer × acid, two azide × acid pairs); a fourth
-    (basic salts × strong oxidizing acids, e.g. sulfuric acid meeting sodium hypochlorite
-    bleach) was added 2026-07-11, hand-authored from CAMEO's own pairwise documentation the
-    same way as the first three. Paste a different protocol and most pairs will still come
-    back `no_established_data` — surfaced honestly, never implied safe, but worth stating
-    plainly: this is a seed set, not broad coverage.
+<details>
+<summary><b>What I learned building this</b></summary>
 
-## What we learned building this
+- The restraint was the product. Every instinct during a hackathon is to add flags and features. The value here came from the opposite: the tool is trusted because most of it refuses to let a model write the answer, and the one advisory layer is honest about being advisory.
+- The most valuable input is the messy one. The tool that only reads clean numbered protocols is close to no tool, because a scientist who wrote a clean protocol already reasoned through it. Getting it to read free-text prose is what makes it real.
+- A test fixture can hide a bug from itself. A value hardcoded to the demo passed 70 runs because the demo is the fixture. The fix was one line; the lesson was to assert every visible field against something that is not the demo.
 
-<!-- SECTION TO BE PROVIDED BY OWNER -->
-
-## Roadmap
-
-Decisions, not a timeline: what shipped and why it was built that way, what was designed
-and deliberately not built, and what was investigated and ruled out of scope.
-
-### Shipped
-
-- **Stage 4 makes zero Claude calls.** `build_brief()` copies already-fetched fields into
-  rendered statements — it doesn't select, rank, or write anything. Deliberate: with no
-  generation step in the render path, there's no mechanism by which an ungrounded claim
-  could enter the brief.
-- **Honest omission is explicit at every layer**, not just asserted once. A missing
-  PubChem section, an unresolved chemical mention, a reactive-group pair with no matrix
-  entry, a chemical grounding failure — each has its own named field
-  (`missing_sections`, `unresolved_mentions`, `no_established_data`,
-  `insufficient_reactive_group_data`, `grounding_error`) and its own honest surface in the
-  brief. None of them default to silence.
-- **Cross-step carryover tracking, not just same-sentence mixing.** The step model tags
-  every chemical's presence with an origin (`added` / `carried_over` / `residual`), which
-  is what lets step 5's azide-into-the-acid-waste-carboy hazard get caught even though
-  sodium azide and sulfuric acid are never named in the same sentence.
-- **Reactive-group assignment (live) and pairwise danger verdict (offline) are two
-  separate modules with a narrow interface**, not one grounding step. `app/pubchem.py`
-  fetches which reactive group a chemical belongs to; `app/interaction_matrix.py` is a
-  small, hand-encoded, offline table of verdicts for pairs of groups, each entry fetched
-  and quoted from CAMEO's own pairwise reactivity-documentation pages at the time it was
-  added. Keeping them apart is what makes "this verdict is looked up, not generated" a
-  defensible claim instead of a blended one.
-
-### Designed, deliberately not built
-
-- **Agentic build-time matrix extender.** An agent that fetches a new CAMEO
-  reactive-group datasheet and proposes a matrix entry with its source quote attached — to
-  a human, for review, before it's added. Keeps the matrix's "fetched and quoted, not
-  recalled" rule intact while it grows past the current hand-picked seed set.
-- **Byproduct / reaction-product grounding.** A reaction's byproduct (e.g. hydrazoic
-  acid) has its own PubChem CID and could be grounded the same way its precursors are.
-- **Compound-specific glove-material recommendations — rejected on the merits, not
-  skipped for time.** SDSs are frequently vague about which glove material a chemical
-  actually requires, quantitative breakthrough data lives with manufacturers rather than in
-  any free structured database, and OSHA explicitly warns published breakthrough times can
-  be optimistic. Showing exactly where the data stops is the more honest choice than
-  guessing a material.
-- **Reagent substitution / "safer alternatives" — also rejected on the merits.**
-  Authoritative substitution guides do exist, so "no authority to cite" isn't the real
-  reason. The real reason: substitution requires knowing what the reagent is *for* in this
-  protocol, and a newcomer — this tool's named user — can't safely judge whether a swap
-  preserves the experiment. Suggesting one would be a new risk this tool created, not a
-  safety feature.
-
-### Investigated, out of scope
-
-- **A PubChem-native path to biological-reagent coverage (SDS Section 10-style data).**
-  PubChem carries per-chemical "Safety and Hazards → Stability and Reactivity" headings
-  that looked like a second, parallel interaction-evidence source — specifically to cover
-  reagents the CAMEO matrix's seed set doesn't classify at all (guanidinium thiocyanate,
-  DTT, Triton X-100 were the motivating examples). Checked against a 39-chemical coverage
-  list: only 22 had either heading, and every one of those 22 already had a CAMEO reactive
-  group too. All three motivating examples returned nothing. The new source turned out to
-  be gated by the same "is this a well-documented classic hazmat compound" criterion as the
-  data PreCaution already has — a second lens on the same population, not a fix for the
-  biological-reagent gap it was proposed to close. Abandoned, not deferred: 14 of 36
-  chemicals in that list stay uncovered by either mechanism, and nothing about revisiting
-  the same PubChem headings would change that.
+</details>
 
 ## Running it
 
@@ -291,51 +164,31 @@ and deliberately not built, and what was investigated and ruled out of scope.
 python -m venv .venv
 .venv/Scripts/activate        # Windows; use .venv/bin/activate on macOS/Linux
 pip install -r requirements.txt
-cp .env.example .env          # fill in ANTHROPIC_API_KEY
+cp .env.example .env          # add ANTHROPIC_API_KEY
 uvicorn app.main:app --reload
 ```
 
-Then open `http://127.0.0.1:8000` — paste a protocol (or load the built-in demo) and click
-**Read the protocol**. The web UI runs on `POST /brief/stream` (the full pipeline as
-Server-Sent Events, for the live stage log) and `GET /interaction-matrix` (the in-app
-interaction-table panel). Two more endpoints exist for direct use: `POST /extract` (Stage 1
-only) and `POST /brief` (the full pipeline, one response, no streaming). `GET /health` is a
-plain liveness check.
+Open `http://127.0.0.1:8000`, paste a protocol or load the built-in demo, and click **Read the protocol**. The UI streams the pipeline over Server-Sent Events (`POST /brief/stream`) with a live stage log. Direct endpoints: `POST /extract` (reading only), `POST /brief` (full pipeline, one response), `GET /interaction-matrix` (the in-app table), `GET /health` (liveness).
 
-**Timing**, measured on the locked demo protocol: **~49s on a cold cache** (one Claude
-extraction call plus a fresh, uncached PubChem grounding pass across six chemicals) and **~24s
-warm** (grounding responses are disk-cached; extraction itself is a live call every run, so it's
-never instant). Real single-run numbers, not averaged — expect some variance from Claude and
-PubChem's own latency.
+**Timing**, on the locked demo: **~58s cold, ~32s warm** (measured). Every run makes two live Claude reasoning passes, reading the protocol into structured state and running the `CHECK` omission pass, so it is never instant, and that is the point: it is doing real reading, not returning a canned answer. Cold adds a fresh PubChem grounding pass across six chemicals; warm reuses disk-cached grounding, leaving just the two live calls. Real single-run numbers, expect variance from Claude and PubChem latency.
 
 ## Testing
 
 ```bash
-pytest                                   # default: excludes tests marked `costly` (real Anthropic API spend)
-pytest -m costly                         # also run the costly (real Anthropic API) tests — opt in explicitly
-pytest tests/test_pubchem.py             # one file
-pytest tests/test_pubchem.py::test_parse_ghs_classification_offline   # one test
+pytest                    # excludes tests marked `costly` (real API spend)
+pytest -m costly          # opt into the costly (real API) tests
 ```
 
-65 tests passed, 3 deselected (`costly`) as of the last full run. `tests/test_brief.py::test_every_brief_statement_has_resolvable_source_ref` is what makes "every claim is sourced" a passing test, not just a README assertion — it fails the build if any statement in the brief is missing a `source_ref`, and grounded statement kinds must also carry a `source_url`.
+The suite is **75 passing**, plus 7 `costly` tests deselected by default (they spend real API budget). The test that makes "every claim is sourced" real rather than a slogan is `test_every_brief_statement_has_resolvable_source_ref`: it fails the build if any statement in the brief lacks a source reference, and grounded statements must also carry a source URL.
 
 ## Status
 
-🚧 Active build, hackathon week of July 7–13, 2026.
+Active build, Built with Claude: Life Sciences Hackathon, July 2026.
 
 ## Acknowledgments
 
-Built collaboratively with [Claude Code](https://claude.com/claude-code) — architecture,
-implementation, and testing across all four pipeline stages and the web UI were developed in
-an interactive session with Claude. That collaboration is itself the subject of this hackathon;
-it doesn't change the tool's own rule that every hazard claim it makes must trace back to
-PubChem or CAMEO, never to model recall.
+Built with [Claude Code](https://claude.com/claude-code): architecture, implementation, and testing across all pipeline stages and the web UI were developed in an interactive session with Claude. That collaboration is the subject of the hackathon. It does not change the tool's own rule that every hazard verdict traces to PubChem or CAMEO, never to model recall.
 
 ## License
 
-[MIT](LICENSE)
-
-Chemical hazard data comes from two public sources, credited inline throughout the brief:
-[PubChem](https://pubchem.ncbi.nlm.nih.gov/) (NIH/NLM, public domain) and
-[CAMEO Chemicals](https://cameochemicals.noaa.gov/) (a joint NOAA/EPA tool). Neither
-organization endorses this project.
+[MIT](LICENSE). Chemical hazard data comes from two public sources, credited inline throughout the brief: [PubChem](https://pubchem.ncbi.nlm.nih.gov/) (NIH/NLM, public domain) and [CAMEO Chemicals](https://cameochemicals.noaa.gov/) (a joint NOAA/EPA tool). Neither organization endorses this project.
