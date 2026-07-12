@@ -26,17 +26,40 @@ from app.brief import build_brief
 from app.extraction import ExtractionError, extract
 from app.interactions import ChemicalPairFinding, find_step_interactions
 from app.models import Brief, ChemicalHazardProfile, ExtractionResult
+from app.omissions import OmissionDetectionError, OmissionDetectionResult, detect_omissions
 from app.pubchem import ground_chemical
+from app.segmentation import SegmentationError, needs_segmentation, segment_protocol
 
 
 class PipelineResult(BaseModel):
     extraction: ExtractionResult
     profiles: dict[str, ChemicalHazardProfile]
     findings: list[ChemicalPairFinding]
+    omissions: OmissionDetectionResult
     brief: Brief
 
 
-def run_pipeline(protocol_text: str) -> PipelineResult:
+def _extraction_input(protocol_text: str) -> str:
+    """Restore step structure ahead of extraction for the one input shape that
+    needs it: continuous prose (a single unbroken paragraph of >=2 sentences).
+
+    Strictly additive by construction. Already-structured protocols and trivial
+    one-liners fail `needs_segmentation` and pass straight through to extraction
+    exactly as before. And on any segmentation failure (or a non-procedure that
+    segments to nothing) we return the raw text, so this can never do worse than
+    feeding the original protocol to extraction — a non-protocol paragraph still
+    reaches extraction, finds no chemicals, and lands in the empty state.
+    """
+    if not needs_segmentation(protocol_text):
+        return protocol_text
+    try:
+        segmented = segment_protocol(protocol_text)
+    except SegmentationError:
+        return protocol_text
+    return segmented.as_protocol_text() if segmented.steps else protocol_text
+
+
+def run_pipeline(protocol_text: str, enable_omissions: bool = True) -> PipelineResult:
     """Run the full pipeline on a free-text protocol.
 
     May raise app.extraction.ExtractionError if Stage 1 fails — grounding
@@ -45,15 +68,31 @@ def run_pipeline(protocol_text: str) -> PipelineResult:
     grounding_error, not thrown), so no additional error type is introduced
     here. A grounding failure on some chemicals therefore still produces a
     Brief — just one with Brief.incomplete=True.
+
+    `enable_omissions` is the per-protocol suppression switch (Build_Spec.md's
+    omission-detection phase, rule 2d) — default on. Omission-detection is a
+    separate Claude reasoning step (like extraction) with its own failure mode;
+    a failure there degrades to zero flags rather than taking down the whole
+    brief, since it's a strictly additive layer, never load-bearing for the
+    hazard verdicts the rest of the pipeline produces.
     """
-    result = extract(protocol_text)
+    result = extract(_extraction_input(protocol_text))
 
     profiles = {name: ground_chemical(name) for name in {c.canonical_name for c in result.chemicals}}
 
     findings = find_step_interactions(result, profiles)
-    brief = build_brief(result, profiles, findings)
 
-    return PipelineResult(extraction=result, profiles=profiles, findings=findings, brief=brief)
+    if enable_omissions:
+        try:
+            omissions = detect_omissions(result, profiles)
+        except OmissionDetectionError:
+            omissions = OmissionDetectionResult(flags=[])
+    else:
+        omissions = OmissionDetectionResult(flags=[])
+
+    brief = build_brief(result, profiles, findings, omissions.flags)
+
+    return PipelineResult(extraction=result, profiles=profiles, findings=findings, omissions=omissions, brief=brief)
 
 
 class StreamMessage(BaseModel):
@@ -61,7 +100,9 @@ class StreamMessage(BaseModel):
     data: dict
 
 
-async def stream_pipeline_events(protocol_text: str) -> AsyncIterator[StreamMessage]:
+async def stream_pipeline_events(
+    protocol_text: str, enable_omissions: bool = True
+) -> AsyncIterator[StreamMessage]:
     """Run the full pipeline, yielding a StreamMessage as each real event happens.
 
     Honesty rule (UI_Design_Spec.md §14.2): a message is yielded only after its
@@ -84,7 +125,12 @@ async def stream_pipeline_events(protocol_text: str) -> AsyncIterator[StreamMess
     """
     yield StreamMessage(event="stage", data={"stage": "extraction", "status": "started"})
     try:
-        result = await asyncio.to_thread(extract, protocol_text)
+        # Prose segmentation (if the input needs it) and extraction both run inside
+        # this one to_thread so the "extraction" stage keeps its existing shape — no
+        # new stage event, no change to the stream contract. Segmentation is folded
+        # into extraction from the UI's point of view, which is the truth of it: it
+        # only reshapes what the extractor reads, it does not reason about hazards.
+        result = await asyncio.to_thread(lambda: extract(_extraction_input(protocol_text)))
     except ExtractionError as exc:
         yield StreamMessage(
             event="error", data={"stage": "extraction", "message": str(exc), "recoverable": False}
@@ -150,7 +196,28 @@ async def stream_pipeline_events(protocol_text: str) -> AsyncIterator[StreamMess
         },
     )
 
-    brief = build_brief(result, profiles, findings)
+    # Omission-detection: a second, separate Claude call (comprehension, like
+    # extraction — never a hazard verdict, never model-generated advice). Genuinely
+    # slow like extraction, so it earns its own started/done pair rather than
+    # appearing to happen for free between "interactions" and "brief". A failure here
+    # degrades to zero flags — never takes down the brief, since this layer is
+    # strictly additive (Build_Spec.md's omission-detection phase, rule 2d covers the
+    # explicit per-protocol suppression switch; this covers the unplanned-failure case).
+    omissions = OmissionDetectionResult(flags=[])
+    if enable_omissions:
+        yield StreamMessage(event="stage", data={"stage": "omissions", "status": "started"})
+        try:
+            omissions = await asyncio.to_thread(detect_omissions, result, profiles)
+        except OmissionDetectionError as exc:
+            yield StreamMessage(
+                event="error", data={"stage": "omissions", "message": str(exc), "recoverable": True}
+            )
+        yield StreamMessage(
+            event="stage",
+            data={"stage": "omissions", "status": "done", "detail": {"flags": len(omissions.flags)}},
+        )
+
+    brief = build_brief(result, profiles, findings, omissions.flags)
     yield StreamMessage(
         event="stage",
         data={"stage": "brief", "status": "done", "detail": {"statements": len(brief.statements)}},

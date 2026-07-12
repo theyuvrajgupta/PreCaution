@@ -31,6 +31,7 @@ from app.models import (
     GHSInfo,
     Step,
 )
+from app.omissions import OmissionFlag
 from app.precautionary_codes import resolve_precautionary_code
 
 # Maps a PubChem safety-note heading (see app.pubchem.SAFETY_NOTE_HEADINGS) to
@@ -473,17 +474,60 @@ def _unresolved_mention_statement(mention: str) -> BriefStatement:
     )
 
 
+def _omission_flag_statement(
+    flag: OmissionFlag, chemical_by_id: dict[str, Chemical], profiles: dict[str, ChemicalHazardProfile]
+) -> BriefStatement:
+    """Renders one tentative flag from app.omissions.detect_omissions. Never a hazard
+    verdict — kind='omission_flag' is invisible to every right-pane hazard/scan-layer
+    computation (app/static/render.js only ever looks for specific kind strings, and
+    this one isn't among them); rendered only inline in the bench-pane step box
+    (app/static/thread.js). source_ref still traces every claim per the brief's own
+    trust contract: an sds-basis flag cites the specific chemical's real PubChem
+    record; a procedural-basis flag has no external record to cite, so it's
+    attributed the same way step_context/unresolved_mention already are — Claude's
+    own read, named as such, never as an authoritative source."""
+    if flag.basis == "sds" and flag.chemical_ids:
+        names: list[str] = []
+        source_url: str | None = None
+        for chem_id in flag.chemical_ids:
+            chemical = chemical_by_id.get(chem_id)
+            if chemical is None:
+                continue
+            names.append(chemical.canonical_name)
+            profile = profiles.get(chemical.canonical_name)
+            if source_url is None and profile is not None:
+                source_url = profile.pubchem_url
+        source_ref = f"PubChem precautionary data for {', '.join(names)}" if names else "PubChem precautionary data"
+    else:
+        source_url = None
+        source_ref = "Claude's read of the protocol text — procedural completeness check, not independently grounded"
+
+    return BriefStatement(
+        text=flag.text,
+        kind="omission_flag",
+        source_ref=source_ref,
+        source_url=source_url,
+        step_numbers=[flag.step_number],
+        chemical_ids=list(flag.chemical_ids),
+    )
+
+
 def build_brief(
     result: ExtractionResult,
     profiles: dict[str, ChemicalHazardProfile],
     findings: list[ChemicalPairFinding],
+    omission_flags: list[OmissionFlag] | None = None,
 ) -> Brief:
     """Compose the Stage 4 Brief. Pure — no network, no Anthropic, no PubChem.
 
     `profiles` is keyed by Chemical.canonical_name, matching the convention
-    already used by app.interactions.find_step_interactions.
+    already used by app.interactions.find_step_interactions. `omission_flags` is
+    optional (defaults to none) so existing callers/tests that don't pass it are
+    unaffected — the omission-detection stage is a separate, skippable addition,
+    not a required rework of this function's existing contract.
     """
     statements: list[BriefStatement] = []
+    omission_flags = omission_flags or []
 
     for chemical in result.chemicals:
         profile = profiles.get(chemical.canonical_name)
@@ -521,6 +565,18 @@ def build_brief(
         pair_groups.setdefault(key, []).append(finding)
     for group in pair_groups.values():
         statements.append(_interaction_statement(group, protocol_chemical_names))
+
+    # 2d, hard rule: an omission flag NEVER fires on a step that already carries an
+    # interaction hazard — the hazard owns that step. Computed from the statements
+    # just built above (their step_numbers are the final, deduplicated ones — grouped
+    # by pair, not per-occurrence), not from raw findings, so this can't drift from
+    # what actually rendered as a hazard card.
+    hazard_owned_steps = {n for s in statements if s.kind == "interaction_hazard" for n in s.step_numbers}
+    chemical_by_id = {c.id: c for c in result.chemicals}
+    for flag in omission_flags:
+        if flag.step_number in hazard_owned_steps:
+            continue
+        statements.append(_omission_flag_statement(flag, chemical_by_id, profiles))
 
     # UI_Design_Spec.md §6.6: "attached to the PPE section"; §15 item 4: "attached to
     # PPE where it bites." This qualifies REAL PPE content that was actually rendered —

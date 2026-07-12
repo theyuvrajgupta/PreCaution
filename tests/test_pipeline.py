@@ -18,7 +18,26 @@ from app import pipeline
 from app.config import get_settings
 from app.extraction import ExtractionError
 from app.models import ChemicalHazardProfile, ExtractionResult
+from app.omissions import OmissionDetectionResult
+from app.segmentation import SegmentationResult
 from test_brief import _full_profile
+from test_segmentation import _NON_PROTOCOL_PROSE, _RUN_A_PROSE
+
+# Every offline test below must mock this too, not just extract/ground_chemical —
+# omission-detection is a real, separate Anthropic call (app.omissions.detect_omissions),
+# and leaving it unmocked in a test outside the `costly` marker means the default
+# `pytest` run silently spends real API budget. Empty flags: these tests exercise the
+# wiring, not omission-detection's own reasoning (that's tests/test_omissions.py, costly).
+def _fake_detect_omissions(result, profiles):
+    return OmissionDetectionResult(flags=[])
+
+
+# Prose segmentation (app.segmentation.segment_protocol) is a third real Anthropic
+# call, only reached for single-paragraph prose. These offline tests use structured
+# stub text so it is never reached, but mock it anyway to keep the "no paid call in
+# the default suite" invariant explicit rather than relying on the guard's threshold.
+def _fake_segment(protocol_text):
+    return SegmentationResult(steps=[])
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
@@ -48,6 +67,8 @@ def test_run_pipeline_wires_all_stages_offline(monkeypatch):
 
     monkeypatch.setattr(pipeline, "extract", lambda protocol_text: expected)
     monkeypatch.setattr(pipeline, "ground_chemical", _fake_ground_chemical)
+    monkeypatch.setattr(pipeline, "detect_omissions", _fake_detect_omissions)
+    monkeypatch.setattr(pipeline, "segment_protocol", _fake_segment)
 
     result = pipeline.run_pipeline("irrelevant — extract() is mocked")
 
@@ -82,6 +103,32 @@ def test_run_pipeline_live_demo_protocol():
     assert 5 in hazard_steps
 
 
+@pytest.mark.costly
+@pytest.mark.skipif(not get_settings().anthropic_api_key, reason="ANTHROPIC_API_KEY not set")
+def test_run_pipeline_prose_paragraph_now_extracts():
+    """Run A, the permanent regression for the prose bug: bleach + acid written as
+    ONE unbroken prose paragraph must now extract, not land in the empty state
+    (Build_Spec: Prose Segmentation, gate #3). Before segmentation this produced
+    zero chemicals."""
+    result = pipeline.run_pipeline(_RUN_A_PROSE)
+
+    assert result.extraction.chemicals, "prose paragraph must extract chemicals, not empty out"
+    names = {c.canonical_name.lower() for c in result.extraction.chemicals}
+    assert any("hypochlorite" in n or "bleach" in n for n in names), names
+    assert any("hydrochloric" in n or "hydrogen chloride" in n for n in names), names
+
+
+@pytest.mark.costly
+@pytest.mark.skipif(not get_settings().anthropic_api_key, reason="ANTHROPIC_API_KEY not set")
+def test_run_pipeline_non_protocol_prose_stays_empty():
+    """Non-protocol guard (gate #4): a genuine non-procedure paragraph must still
+    yield zero chemicals so the UI lands it in the empty state. Segmentation must
+    not manufacture steps out of arbitrary prose."""
+    result = pipeline.run_pipeline(_NON_PROTOCOL_PROSE)
+
+    assert result.extraction.chemicals == []
+
+
 @pytest.mark.asyncio
 async def test_stream_pipeline_events_happy_path(monkeypatch):
     fixture = json.loads((FIXTURES / "extraction_response.json").read_text(encoding="utf-8"))
@@ -89,6 +136,8 @@ async def test_stream_pipeline_events_happy_path(monkeypatch):
 
     monkeypatch.setattr(pipeline, "extract", lambda protocol_text: expected)
     monkeypatch.setattr(pipeline, "ground_chemical", _fake_ground_chemical)
+    monkeypatch.setattr(pipeline, "detect_omissions", _fake_detect_omissions)
+    monkeypatch.setattr(pipeline, "segment_protocol", _fake_segment)
 
     messages = [msg async for msg in pipeline.stream_pipeline_events("irrelevant — extract() is mocked")]
 
@@ -138,18 +187,24 @@ async def test_stream_pipeline_events_happy_path(monkeypatch):
     # Deduped: 2 real hazards (piranha, azide/acid), not one per step occurrence.
     assert rest[0].data["detail"]["hazards_found"] == 2
 
-    assert rest[1].event == "stage" and rest[1].data["stage"] == "brief"
+    # Omission-detection earns its own started/done pair, same as extraction — a real,
+    # separate stage, not something that happens for free between interactions and brief.
+    assert rest[1].event == "stage" and rest[1].data == {"stage": "omissions", "status": "started"}
+    assert rest[2].event == "stage" and rest[2].data["stage"] == "omissions"
+    assert rest[2].data["detail"]["flags"] == 0  # _fake_detect_omissions returns no flags
 
-    assert rest[2].event == "result"
+    assert rest[3].event == "stage" and rest[3].data["stage"] == "brief"
+
+    assert rest[4].event == "result"
     hazard_steps = {
         n
-        for s in rest[2].data["statements"]
+        for s in rest[4].data["statements"]
         if s["kind"] == "interaction_hazard"
         for n in s["step_numbers"]
     }
     assert 1 in hazard_steps
     assert 5 in hazard_steps
-    assert len(rest) == 3  # nothing after result
+    assert len(rest) == 5  # nothing after result
 
 
 @pytest.mark.asyncio
@@ -184,6 +239,8 @@ async def test_stream_pipeline_events_grounding_outage_still_completes(monkeypat
 
     monkeypatch.setattr(pipeline, "extract", lambda protocol_text: expected)
     monkeypatch.setattr(pipeline, "ground_chemical", _flaky_ground_chemical)
+    monkeypatch.setattr(pipeline, "detect_omissions", _fake_detect_omissions)
+    monkeypatch.setattr(pipeline, "segment_protocol", _fake_segment)
 
     messages = [msg async for msg in pipeline.stream_pipeline_events("irrelevant")]
 

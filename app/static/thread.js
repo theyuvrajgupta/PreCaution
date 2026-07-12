@@ -61,7 +61,7 @@ function computeLoadBearingSteps(steps, onsetAt) {
   return loadBearing;
 }
 
-function buildStepRow(step, isLoadBearing) {
+function buildStepRow(step, isLoadBearing, checkFlags) {
   const row = document.createElement("div");
   row.className = "bench-step rise-in";
   row.dataset.step = String(step.number);
@@ -121,6 +121,28 @@ function buildStepRow(step, isLoadBearing) {
     row.appendChild(vessel);
   }
 
+  // Omission-detection (Build_Spec.md's omission-detection phase, §2e): CHECK is a
+  // SIBLING to the UNV marker above, never a reuse of it — UNV's scarcity (the one
+  // load-bearing carryover attribution) is itself load-bearing for the demo narration,
+  // and reusing it here would dilute that. Same family (quiet, secondary, clearly-
+  // Claude's-read), same position/weight/contrast as the Vessel line just above (not
+  // lighter — the global UI rule bans washed-out grey, and --muted-bench is already the
+  // "full readable contrast, secondary weight" token this pane uses for exactly this
+  // register). The CHECK word itself borrows --caution-bench (already used for GHS
+  // Warning signal words) so it reads as "worth a look," not danger-red and not a plain
+  // grey word indistinguishable from body text — reusing an existing token, not a new
+  // colour. Never fires on a step that already carries an interaction hazard (2d) —
+  // enforced in app/brief.py before this ever sees the flag, not here.
+  for (const flag of checkFlags) {
+    const check = document.createElement("p");
+    check.className = "mono bench-step-check";
+    const marker = document.createElement("span");
+    marker.className = "step-check-marker";
+    marker.textContent = "CHECK";
+    check.append(marker, ` · ${flag.text}`);
+    row.appendChild(check);
+  }
+
   return row;
 }
 
@@ -136,6 +158,22 @@ function pruneUnchangedVesselTicks(stepsEl, steps) {
       else prevVessel = step.vessel;
     }
   }
+}
+
+// Omission-detection (Build_Spec.md §2e): stepNumber -> [flag, ...]. Brief.statements
+// mixes every kind together (hazard_identity, interaction_hazard, omission_flag, ...) —
+// this is the one place that pulls just the omission_flag kind out for the bench pane,
+// mirroring computeOnsetAndHotSegments's shape immediately below for the hazard kind.
+function computeCheckFlagsByStep(statements) {
+  const byStep = new Map();
+  for (const s of statements) {
+    if (s.kind !== "omission_flag") continue;
+    for (const stepNum of s.step_numbers) {
+      if (!byStep.has(stepNum)) byStep.set(stepNum, []);
+      byStep.get(stepNum).push(s);
+    }
+  }
+  return byStep;
 }
 
 // onset: stepNumber -> [statement, ...] (where a pair NEWLY returns hazard_found).
@@ -252,17 +290,22 @@ function drawGutter(gutterEl, stepsEl, steps, onsetAt, hotSegments) {
   }
 
   // Diamonds: hazard onset — one per pair that newly returns hazard_found, never
-  // one per step it persists through. Offsets sized for the 13px diamond (up from
-  // 9px — the thread is this app's signature element, sized to read as one): a
-  // rotated 13px square's diagonal is ~18.4px, so successive diamonds need at
-  // least that much vertical spacing to avoid overlapping (18/i step below).
+  // one per step it persists through. The FIRST diamond at a step sits at exactly
+  // `center` — the same coordinate the line segments above/below terminate at
+  // (line.style.top / centerByStep.get(...) have no offset) — so the thread meets
+  // the diamond cleanly at both ends instead of stopping short with a gap (fix,
+  // 2026-07-13: a stray "+18" base offset here had every diamond floating 18px
+  // below the row centre the line actually connects to). A SECOND diamond at the
+  // same step (two pairs onsetting on the same row) still needs real separation
+  // from the first — a rotated 13px square's diagonal is ~18.4px — so only i>0
+  // gets pushed further down, never the first.
   for (const [stepNum, hazardsHere] of onsetAt) {
     const center = centerByStep.get(stepNum);
     if (center === undefined) continue;
     hazardsHere.forEach((s, i) => {
       const diamond = document.createElement("div");
       diamond.className = "gutter-diamond";
-      diamond.style.top = `${center + 18 + i * 19}px`;
+      diamond.style.top = `${center + i * 19}px`;
       gutterEl.appendChild(diamond);
     });
   }
@@ -278,6 +321,7 @@ export function renderThread(gutterEl, stepsEl, { steps, statements }) {
 
   const { onsetAt, hotSegments } = computeOnsetAndHotSegments(statements);
   const loadBearingSteps = computeLoadBearingSteps(steps, onsetAt);
+  const checkFlagsByStep = computeCheckFlagsByStep(statements);
 
   // §22: one quiet section-level note instead of marking every row — the
   // per-row marker is reserved for the load-bearing claim(s) only.
@@ -302,7 +346,8 @@ export function renderThread(gutterEl, stepsEl, { steps, statements }) {
   stepsEl.appendChild(legend);
 
   for (const step of steps) {
-    stepsEl.appendChild(buildStepRow(step, loadBearingSteps.has(step.number)));
+    const checkFlags = checkFlagsByStep.get(step.number) ?? [];
+    stepsEl.appendChild(buildStepRow(step, loadBearingSteps.has(step.number), checkFlags));
   }
   pruneUnchangedVesselTicks(stepsEl, steps);
   drawGutter(gutterEl, stepsEl, steps, onsetAt, hotSegments);

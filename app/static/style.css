@@ -292,9 +292,21 @@ button:disabled {
   min-width: 0;
 }
 
+/* Bench-pane twin of .receipt-credit (2026-07-13): both are a full sentence Claude
+   authored about its own read of the protocol, load-bearing per the global UI rules
+   ("full contrast, and containment where it needs to stand apart"), not a caption like
+   the legend below it (which stays --muted-bench per the "Gutter:"/"Vessel:" carve-out).
+   Same box recipe, dark-pane token pairing: --bench-raised (fill) / --line-bench
+   (border) / --source-bench (accent — this note is also about provenance/attribution,
+   same reasoning as the right pane) / --ink-bench (full-contrast text, not muted). */
 .bench-steps-note {
-  color: var(--muted-bench);
   margin: 0 0 1rem;
+  background: var(--bench-raised);
+  border: 1px solid var(--line-bench);
+  border-left: 3px solid var(--source-bench);
+  border-radius: 2px;
+  padding: 0.6em 0.9em;
+  color: var(--ink-bench);
 }
 
 /* Fix 3 (pre-recording polish pass): the gutter's visual language (thread/diamond/
@@ -393,6 +405,22 @@ button:disabled {
 .bench-step-vessel {
   color: var(--muted-bench);
   margin: 0.3em 0 0;
+}
+
+/* Omission-detection (Build_Spec.md §2e) — CHECK is a sibling to the Unverified
+   marker below, never a reuse of it. Same position/weight as the Vessel line just
+   above: full-contrast --muted-bench body text, not washed-out grey. The CHECK
+   word itself borrows --caution-bench (already used for GHS Warning signal words)
+   so it reads as "worth a look," not danger-red and not indistinguishable from
+   body text — no new color introduced. */
+.bench-step-check {
+  color: var(--muted-bench);
+  margin: 0.3em 0 0;
+}
+
+.step-check-marker {
+  color: var(--caution-bench);
+  font-weight: 700;
 }
 
 /* --- Unverified marker (§6.1a, narrowed by §22) — trust seam, never styled
@@ -1284,8 +1312,23 @@ a.chip:focus-visible,
 
   .bench-step-number,
   .bench-step-vessel,
+  .bench-step-check,
   .bench-steps-note {
     color: #444;
+  }
+
+  .step-check-marker {
+    color: #444;
+    font-weight: 700;
+  }
+
+  /* .bench-steps-note picked up a dark-pane box fill/border on screen (2026-07-13) —
+     reset both for paper, same treatment as .bench-step just above, so it prints as
+     plain text on white, not a dark box. */
+  .bench-steps-note {
+    background: none;
+    border: none;
+    padding: 0;
   }
 
   .bench-step-text {

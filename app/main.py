@@ -28,6 +28,15 @@ class ExtractRequest(BaseModel):
     protocol_text: str
 
 
+class BriefRequest(BaseModel):
+    protocol_text: str
+    # Per-protocol suppression switch for omission-detection (Build_Spec.md's
+    # omission-detection phase, rule 2d) — default on. Lets a specific run be
+    # recorded without the layer if a flag ever lands somewhere distracting,
+    # with no code change or redeploy needed on demo day.
+    enable_omissions: bool = True
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -50,12 +59,12 @@ def extract_endpoint(req: ExtractRequest) -> ExtractionResult:
 
 
 @app.post("/brief")
-def brief_endpoint(req: ExtractRequest) -> PipelineResult:
+def brief_endpoint(req: BriefRequest) -> PipelineResult:
     """Thin wrapper over run_pipeline, mirrors /extract. With app.pubchem.ground_chemical's
     grounding_error fix, this no longer crashes on a PubChem outage — it returns a
     PipelineResult whose brief carries Brief.incomplete/incomplete_chemicals instead."""
     try:
-        return run_pipeline(req.protocol_text)
+        return run_pipeline(req.protocol_text, enable_omissions=req.enable_omissions)
     except ExtractionError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -67,13 +76,13 @@ def _format_sse(msg: StreamMessage) -> str:
 
 
 @app.post("/brief/stream")
-async def brief_stream_endpoint(req: ExtractRequest) -> StreamingResponse:
+async def brief_stream_endpoint(req: BriefRequest) -> StreamingResponse:
     """text/event-stream over the full pipeline. Client must use fetch() + a
     ReadableStream reader, not EventSource (EventSource is GET-only)."""
 
     async def event_source():
         try:
-            async for msg in stream_pipeline_events(req.protocol_text):
+            async for msg in stream_pipeline_events(req.protocol_text, enable_omissions=req.enable_omissions):
                 yield _format_sse(msg)
         except asyncio.CancelledError:
             raise  # client disconnected — let it propagate so work stops

@@ -219,6 +219,7 @@ BriefKind = Literal[
     "no_data",
     "grounding_incomplete",
     "unresolved_mention",
+    "omission_flag",
 ]
 
 

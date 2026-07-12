@@ -23,6 +23,8 @@ from app.extraction import ExtractionError
 from app.interaction_matrix import lookup_verdict
 from app.main import app
 from app.models import ChemicalHazardProfile, ExtractionResult
+from app.omissions import OmissionDetectionResult
+from app.segmentation import SegmentationResult
 from test_brief import _full_profile
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -44,6 +46,20 @@ _CID_BY_NAME = {
 
 def _fake_ground_chemical(name: str) -> ChemicalHazardProfile:
     return _full_profile(name, _CID_BY_NAME.get(name, 1), _GROUP_BY_NAME.get(name))
+
+
+# Same reasoning as tests/test_pipeline.py's copy of this: omission-detection is a real,
+# separate Anthropic call — every offline test below must mock it too, or the default
+# `pytest` run silently spends real API budget.
+def _fake_detect_omissions(result, profiles):
+    return OmissionDetectionResult(flags=[])
+
+
+# See test_pipeline.py's copy: segmentation is a real Anthropic call reached only for
+# single-paragraph prose. These tests use stub text that never reaches it, but mock it
+# anyway to keep the default suite provably free of paid calls.
+def _fake_segment(protocol_text):
+    return SegmentationResult(steps=[])
 
 
 def _demo_fixture_result() -> ExtractionResult:
@@ -101,13 +117,16 @@ def test_brief_endpoint_success(monkeypatch):
     expected = _demo_fixture_result()
     monkeypatch.setattr(pipeline, "extract", lambda protocol_text: expected)
     monkeypatch.setattr(pipeline, "ground_chemical", _fake_ground_chemical)
+    monkeypatch.setattr(pipeline, "detect_omissions", _fake_detect_omissions)
+    monkeypatch.setattr(pipeline, "segment_protocol", _fake_segment)
 
     client = TestClient(app)
     response = client.post("/brief", json={"protocol_text": "irrelevant — extract() is mocked"})
 
     assert response.status_code == 200
     body = response.json()
-    assert set(body.keys()) == {"extraction", "profiles", "findings", "brief"}
+    assert set(body.keys()) == {"extraction", "profiles", "findings", "omissions", "brief"}
+    assert body["omissions"] == {"flags": []}
     assert body["brief"]["statements"]
     assert all(s["source_ref"] for s in body["brief"]["statements"])
 
@@ -129,6 +148,8 @@ def test_brief_stream_emits_wellformed_sse(monkeypatch):
     expected = _demo_fixture_result()
     monkeypatch.setattr(pipeline, "extract", lambda protocol_text: expected)
     monkeypatch.setattr(pipeline, "ground_chemical", _fake_ground_chemical)
+    monkeypatch.setattr(pipeline, "detect_omissions", _fake_detect_omissions)
+    monkeypatch.setattr(pipeline, "segment_protocol", _fake_segment)
 
     client = TestClient(app)
     response = client.post("/brief/stream", json={"protocol_text": "irrelevant"})
@@ -164,6 +185,8 @@ def test_brief_stream_error_frame_is_wellformed(monkeypatch):
 
     monkeypatch.setattr(pipeline, "extract", lambda protocol_text: expected)
     monkeypatch.setattr(pipeline, "ground_chemical", _flaky_ground_chemical)
+    monkeypatch.setattr(pipeline, "detect_omissions", _fake_detect_omissions)
+    monkeypatch.setattr(pipeline, "segment_protocol", _fake_segment)
 
     client = TestClient(app)
     response = client.post("/brief/stream", json={"protocol_text": "irrelevant"})
