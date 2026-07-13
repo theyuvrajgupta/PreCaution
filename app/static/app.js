@@ -21,6 +21,7 @@ const DEMO_PROTOCOL = `1. Prepare piranha solution by slowly adding 30 mL of 30%
 `;
 
 const MIN_LINE_MS = 150; // §14.2 rule 2: a line may linger, minimum 150ms visible
+const BRIEF_HOLD_MS = 1500; // hold the completed stage log so its final "Composing the brief" line is seen, not flashed away by the transition to the rendered brief
 
 const appEl = document.getElementById("app");
 const protocolInput = document.getElementById("protocol-input");
@@ -415,6 +416,12 @@ async function startReading() {
     await log.whenDrained();
 
     if (finalBrief) {
+      // Hold the finished stage log briefly before swapping it for the rendered brief.
+      // Its last line — "Composing the brief…  (no model call)  ↳ N statements · every one
+      // sourced" — is the one that shows the render is deterministic; without this pause it
+      // renders and is hidden ~150ms later by the transition to "read", a flash the viewer
+      // never registers. This is load-bearing for the demo narration of that exact step.
+      await sleep(BRIEF_HOLD_MS);
       state.brief = finalBrief;
       if (state.extractionDetail && state.extractionDetail.chemicals === 0) {
         // §16.2: not an error, an explanation — routes through the 'failed' state's
