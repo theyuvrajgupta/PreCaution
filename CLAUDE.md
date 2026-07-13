@@ -20,6 +20,16 @@ hazards or interaction danger is generated from model recall.
 
 Python 3.13, run from a `.venv`.
 
+One-command setup + launch (creates the venv, installs deps, ensures `.env`, starts the app on
+`127.0.0.1:8000`). This is the judge-facing path — idempotent and offline-safe on re-runs:
+
+```bash
+bash run.sh      # macOS / Linux
+.\run.ps1        # Windows (PowerShell)
+```
+
+Manual equivalent:
+
 ```bash
 python -m venv .venv
 .venv/Scripts/activate        # Windows; use .venv/bin/activate on macOS/Linux

@@ -160,13 +160,30 @@ These are properties of the method, the honest bill for what "looked up, not gen
 
 ## Running it
 
+**One command.** It creates the virtual environment, installs dependencies, and launches the app:
+
+```bash
+bash run.sh      # macOS / Linux
+```
+```powershell
+.\run.ps1        # Windows (PowerShell)
+```
+If PowerShell blocks the script (`running scripts is disabled on this system`), run it once as
+`powershell -ExecutionPolicy Bypass -File run.ps1`.
+
+On first run the script copies `.env.example` to `.env`. Add your `ANTHROPIC_API_KEY` (from [console.anthropic.com](https://console.anthropic.com/)) to that file: the app starts without one, but reading a protocol needs it. The scripts are safe to re-run and skip any setup step already done.
+
+<details>
+<summary>Prefer to set it up by hand?</summary>
+
 ```bash
 python -m venv .venv
-.venv/Scripts/activate        # Windows; use .venv/bin/activate on macOS/Linux
+.venv/bin/activate            # macOS/Linux; use .venv/Scripts/activate on Windows
 pip install -r requirements.txt
 cp .env.example .env          # add ANTHROPIC_API_KEY
 uvicorn app.main:app --reload
 ```
+</details>
 
 Open `http://127.0.0.1:8000`, paste a protocol or load the built-in demo, and click **Read the protocol**. The UI streams the pipeline over Server-Sent Events (`POST /brief/stream`) with a live stage log. Direct endpoints: `POST /extract` (reading only), `POST /brief` (full pipeline, one response), `GET /interaction-matrix` (the in-app table), `GET /health` (liveness).
 
