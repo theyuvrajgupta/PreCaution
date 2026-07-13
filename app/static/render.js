@@ -1,10 +1,10 @@
 // Renders a Brief into the DOM. Pure rendering — no state machine, no fetch,
-// no logic beyond "what does this data look like." Reading hierarchy order
-// per UI_Design_Spec.md §15: scan layer -> interaction hazards -> per-chemical
-// controls (glove notice attached where PPE is shown) -> gaps rendered inline
-// with the chemical they concern, not swept into a footer.
+// no logic beyond "what does this data look like." Reading hierarchy order:
+// scan layer -> interaction hazards -> per-chemical controls (glove notice
+// attached where PPE is shown) -> gaps rendered inline with the chemical they
+// concern, not swept into a footer.
 //
-// Known scope limit, an accepted cut-order fallback (§2.11 / §G): real GHS
+// Known scope limit, an accepted fallback: real GHS
 // pictogram SVGs are not wired through the data model yet (BriefStatement
 // never carries ghs.pictogram_urls) — hazard_identity text already includes
 // the pictogram labels as words, which is the sanctioned fallback.
@@ -13,15 +13,15 @@ const SAFETY_NOTE_KINDS = ["ppe", "first_aid", "disposal", "storage"];
 
 // First-letter capitalization only — chemical names are correctly lowercase
 // mid-sentence (they're not proper nouns); this exists only for the collapsed-row
-// name, which leads its own block and needs a capital per UI_Design_Spec.md §9's
-// sentence-case rule (mirrors app/brief.py's _cap()). Never String.prototype
+// name, which leads its own block and needs a capital when it starts a sentence
+// (mirrors app/brief.py's _cap()). Never String.prototype
 // equivalent of .capitalize() — this leaves everything after the first character
 // untouched.
 export function cap(text) {
   return text ? text[0].toUpperCase() + text.slice(1) : text;
 }
 
-// Display-layer sanitization of a chemical name (Pass B4). Multi-part reagents
+// Display-layer sanitization of a chemical name. Multi-part reagents
 // occasionally leak Stage-1 scratch-work into the name field —
 // "Phenol (25 parts (of 25:24:1 mixture))", "Ethanol (cold (temperature
 // qualifier, not concentration))" — where a nested parenthetical or a reasoning
@@ -45,9 +45,9 @@ export function sanitizeName(name) {
   return out.trim();
 }
 
-// §20.2: per-chemical safety-note excerpts are grouped by source/audience, not
+// Per-chemical safety-note excerpts are grouped by source/audience, not
 // dumped flat — a per-chemical wall of 50+ statements is the thing this
-// section exists to fix. Render order locked to the spec: NIOSH -> ERG ->
+// section exists to fix. Render order locked: NIOSH -> ERG ->
 // GHS classification -> P-codes -> other (anything not NIOSH/ERG-attributed,
 // e.g. HSDB/ICSC — not named in the spec, placed last, open since it's
 // substantive safety content, not audience-mismatched noise).
@@ -65,9 +65,9 @@ const GAP_HEADING = {
   // data) — but reuses the gap-card's quiet, non-hazard visual treatment since it's
   // still non-hazard content, distinct heading so it never reads as missing data.
   reactive_classification: "REACTIVE-GROUP CLASSIFICATION",
-  // Phase 1b: also not a gap — a correct, expected absence (proteins aren't small
-  // molecules) reusing the same quiet visual treatment, distinct heading so it never
-  // reads as a resolution failure the way a genuine "no PubChem record" does.
+  // Also not a gap — a correct, expected absence (proteins aren't small molecules)
+  // reusing the same quiet visual treatment, distinct heading so it never reads as a
+  // resolution failure the way a genuine "no PubChem record" does.
   not_small_molecule: "PROTEIN: NOT A SMALL MOLECULE",
 };
 
@@ -75,10 +75,10 @@ function clearChildren(el) {
   while (el.firstChild) el.removeChild(el.firstChild);
 }
 
-// Fix 4 (pre-recording polish pass): same accessible-tooltip pattern already proven in
-// thread.js's unverified marker (aria-describedby, reveal on hover/focus, Escape to
-// dismiss) — generalised here for scan-layer jargon a biologist reader can't be assumed
-// to already know. Returns the tooltip element; caller appends it near `el`.
+// Same accessible-tooltip pattern already proven in thread.js's unverified marker
+// (aria-describedby, reveal on hover/focus, Escape to dismiss) — generalised here for
+// scan-layer jargon a biologist reader can't be assumed to already know. Returns the
+// tooltip element; caller appends it near `el`.
 let infoTipCounter = 0;
 function attachTooltip(el, tipText) {
   const tipId = `info-tip-${++infoTipCounter}`;
@@ -108,7 +108,7 @@ function attachTooltip(el, tipText) {
   return tip;
 }
 
-// Fix 4: a bare "CID 784" chip assumes the reader already knows what a CID is. Prefixed
+// A bare "CID 784" chip assumes the reader already knows what a CID is. Prefixed
 // display-only, at render time — the underlying source_ref data is untouched, and this
 // only ever matches the bare-CID shape, never a CAMEO/EU CLP/other source_ref (those are
 // sourced content and must render exactly as composed).
@@ -116,8 +116,8 @@ function chipLabel(sourceRef) {
   return /^CID \d+$/.test(sourceRef) ? `PubChem ${sourceRef}` : sourceRef;
 }
 
-// Presentation pass (2026-07-12, second round): "1, 2, and 3" — used by the scan-layer
-// locator line below. No existing equivalent in this file (app/brief.py has its own
+// "1, 2, and 3" — used by the scan-layer locator line below. No existing
+// equivalent in this file (app/brief.py has its own
 // Python-side _join_with_or for a different purpose; this is a small, self-contained JS
 // counterpart, "and" rather than "or").
 function joinWithAnd(items) {
@@ -146,11 +146,11 @@ function renderChip(statement) {
   return el;
 }
 
-// The "PreCaution interaction table" reference used to render as an inert
-// <span> (via renderChip, since these statements carry no source_url) —
-// looked like every other clickable chip but did nothing. It's the one
-// citation this app CAN make genuinely clickable in-app (the table is local
-// data, not a remote URL), so it gets its own button-chip instead, wired by
+// The "PreCaution interaction table" reference is a real button-chip, not an
+// inert <span> — it looks like every other clickable chip, so it must actually
+// do something. It's the one citation this app CAN make genuinely clickable
+// in-app (the table is local data, not a remote URL), so it gets its own
+// button-chip, wired by
 // the caller (app.js owns opening/fetching the panel; this module only
 // builds DOM — see the file header's "no fetch, no logic" rule).
 function renderInteractionTableChip(onOpenInteractionTable) {
@@ -176,9 +176,9 @@ function renderHazardCard(statement, onOpenInteractionTable) {
 
   card.append(signal, steps);
 
-  // §item-1 audit: lead_in is authored (which chemicals, combined directly or one
-  // carried over) — rendered separately, above the quote, with NO chip. Never
-  // concatenated into the chipped block; see app/interaction_matrix.py.
+  // lead_in is authored (which chemicals, combined directly or one carried over) —
+  // rendered separately, above the quote, with NO chip. Never concatenated into the
+  // chipped block; see app/interaction_matrix.py.
   if (statement.lead_in) {
     const leadIn = document.createElement("p");
     leadIn.className = "card-lead-in";
@@ -264,15 +264,13 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
   // record, a real CID) but had specific sections missing — water, nitrogen, PBS were
   // all `found`. Say the two distinct things separately.
   //
-  // Phase 1c (2026-07-13): "grounded" used to be computed as total - failedGrounding,
-  // which silently counted a clean "no PubChem record" chemical (found=False,
-  // grounding_error=None — e.g. paraformaldehyde before the Phase 1a alias fix) as
-  // "grounded," while its own per-chemical row correctly showed a gap card. That's the
-  // contradiction this fix closes: five states, computed directly from chemicalRecords
-  // (not a mix of chemicalRecords and brief.incomplete_chemicals), mutually exclusive,
-  // always summing to extractionDetail.chemicals — grounded / fallback-sourced (Phase 2:
-  // real hazard data, just not from PubChem) / no record / protein (expected
-  // non-small-molecule absence) / failed grounding (network status unknown).
+  // "grounded" is counted directly from chemicalRecords, not as total - failedGrounding:
+  // the latter silently counts a clean "no PubChem record" chemical (found=False,
+  // grounding_error=None) as "grounded" while its own per-chemical row shows a gap card.
+  // Five mutually-exclusive states, always summing to extractionDetail.chemicals —
+  // grounded / fallback-sourced (real hazard data, just not from PubChem) / no record /
+  // protein (expected non-small-molecule absence) / failed grounding (network status
+  // unknown).
   const grounded = chemicalRecords.filter((c) => c.found).length;
   const failedGrounding = chemicalRecords.filter((c) => c.grounding_error).length;
   const fallbackSourced = chemicalRecords.filter((c) => !c.found && c.fallback_source).length;
@@ -285,8 +283,8 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
   const el = document.createElement("div");
   el.className = "scan-layer rise-in";
 
-  // Presentation pass (2026-07-12, second round): "OVERALL ASSESSMENT" invited exactly
-  // the misreading a bare DANGER headline already risked — a verdict on the whole
+  // "OVERALL ASSESSMENT" invited exactly the misreading a bare DANGER headline already
+  // risked — a verdict on the whole
   // protocol, not a pointer to specific findings. "AT A GLANCE" frames this block as a
   // scannable overview (it also covers line2's grounding/PPE counts, which aren't
   // interaction findings at all) rather than a grade.
@@ -336,13 +334,11 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
       el.appendChild(locator);
     }
   } else {
-    // Pre-submission correctness check, 2026-07-11: most protocols a Gladstone
-    // researcher pastes will hit none of our 3 matrix entries, making this the
-    // single most likely page a judge sees. "NO INTERACTION HAZARDS FOUND" reads
-    // in the same spirit as the banned "no risks found" even though it isn't the
-    // literal phrase — an absence-of-finding headline, not a checked-and-found-
-    // nothing one. Reworded, and paired with an explicit caveat line below so
-    // this can never be misread as a safety claim.
+    // Most protocols a Gladstone researcher pastes will hit none of our matrix entries,
+    // making this the single most likely page a judge sees. "NO INTERACTION HAZARDS
+    // FOUND" reads in the same spirit as the banned "no risks found" — an absence-of-
+    // finding headline, not a checked-and-found-nothing one. Reworded, and paired with an
+    // explicit caveat line below so this can never be misread as a safety claim.
     const signal = document.createElement("p");
     signal.className = "signal";
     signal.style.color = "var(--muted-paper)";
@@ -360,29 +356,26 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
   // (same dedup pattern as the receipt line).
   const line1 = document.createElement("p");
   line1.className = "scan-line";
-  // Pass B5 reconciliation: the chemical count is chemicalRecords.length — the exact
-  // list the per-chemical panel below renders and that line2's five states partition —
-  // NOT extractionDetail.chemicals (the raw Stage-1 mention count). The two disagreed on
-  // phenol-chloroform (7 counted here, 6 listed in the panel) because a non-grounded
-  // mention was counted but never got a panel row. Keying both off the same list makes
-  // them reconcile by construction. Singular/plural conditional on both counts.
+  // The chemical count is chemicalRecords.length — the exact list the per-chemical panel
+  // below renders and that line2's five states partition — NOT extractionDetail.chemicals
+  // (the raw Stage-1 mention count). The two can disagree (a non-grounded mention counted
+  // but never given a panel row); keying both off the same list makes them reconcile by
+  // construction. Singular/plural conditional on both counts.
   const stepCount = extractionDetail.steps;
   const chemCount = chemicalRecords.length;
   line1.textContent =
     `${stepCount} step${stepCount === 1 ? "" : "s"} · ${chemCount} chemical${chemCount === 1 ? "" : "s"}`;
 
-  // Fix 4: "grounded", "PPE limitation", and "no GHS hazard classification" assume a
-  // chemist reader. Tooltipped in place rather than rephrased — the underlying terms
-  // ("grounding", "PPE") are used consistently elsewhere in the app (stage log, per-
-  // chemical rows) and are worth keeping recognisable, just explained on first read.
+  // "grounded", "PPE limitation", and "no GHS hazard classification" assume a chemist
+  // reader. Tooltipped in place rather than rephrased — the underlying terms ("grounding",
+  // "PPE") are used consistently elsewhere in the app and are worth keeping recognisable,
+  // just explained on first read.
   //
-  // Trim pass (2026-07-13): "no PubChem record" moved here from its own line — it's the
-  // closest analog to the original "0 chemicals without hazard data" case this strip's
-  // "always print the zero" rule was built for (§21's audit), so it stays always-shown.
-  // "protein"/"fallback-sourced" did NOT get that history — they're narrow, newer
-  // categories whose zero is genuinely uninteresting when a protocol has no biologicals
-  // at all (e.g. the piranha demo will never touch either), so they're broken out below
-  // and only rendered when non-zero, instead of two permanent noise clauses.
+  // "no PubChem record" is always shown (including its zero), the closest analog to the
+  // "0 chemicals without hazard data" case this strip's "always print the zero" rule was
+  // built for. "protein"/"fallback-sourced" are narrower categories whose zero is
+  // uninteresting when a protocol has no biologicals (e.g. the piranha demo touches
+  // neither), so they're broken out below and rendered only when non-zero.
   const line2 = document.createElement("p");
   line2.className = "scan-line";
 
@@ -463,7 +456,7 @@ function renderScanLayer(brief, chemicalRecords, extractionDetail) {
     el.appendChild(line2b);
   }
 
-  // Fix 6: the "N pairs checked / N pairs could not be checked" counts used to repeat
+  // The "N pairs checked / N pairs could not be checked" counts would otherwise repeat
   // here AND in the dedicated "every other pair" section below —
   // removed from the strip, kept once, in the section that already has room to explain
   // what "checked" means and expand into the full list.
@@ -490,7 +483,7 @@ function pairLabel(statement, chemicalNameById) {
   return cap(names.join(" + "));
 }
 
-// §21: at six chemicals the interaction-hazard section produced ~8 "no established
+// At six chemicals the interaction-hazard section produced ~8 "no established
 // data" gap cards (every co-present pair Stage 3 checks, not just the interesting
 // ones) sitting between the two real findings. Aggregate them into one expandable
 // card instead of one-card-per-pair — still fully inspectable, no longer burying
@@ -530,8 +523,8 @@ function renderGapAggregate(gaps, heading, chemicalNameById, onOpenInteractionTa
   return details;
 }
 
-// §22: the no-data cards used to start immediately after the two hazard cards with
-// no framing, reading as if the brief had just run out of things to say. This wraps
+// Without framing, the no-data cards would start immediately after the two hazard cards
+// and read as if the brief had just run out of things to say. This wraps
 // them with an explicit header ("checked", not "no data" — an action, not an error),
 // one plain-language sentence on what "no established interaction" actually means,
 // and two separately-labelled sub-groups: "checked, found nothing recorded" is a
@@ -551,8 +544,8 @@ function renderNoDataSubgroup(label, gaps, aggregateHeading, chemicalNameById, o
   return group;
 }
 
-// Presentation pass (2026-07-12, second round): nothing previously marked the transition
-// from the real findings (hazard cards) into this section — a reader could read it as
+// Nothing else marks the transition from the real findings (hazard cards) into this
+// section — a reader could read it as
 // more of the same kind of thing, or miss that it's a different epistemic category
 // entirely (checked-and-clear vs. checked-and-hazardous). hasHazardsAbove gates BOTH the
 // divider rule and the framing sentence's opening clause, since the zero-hazard case has
@@ -625,8 +618,8 @@ function renderInteractionSection(brief, chemicalRecords, onOpenInteractionTable
     .sort((a, b) => (a.step_numbers[0] ?? 0) - (b.step_numbers[0] ?? 0));
   const gaps = brief.statements.filter((s) => s.kind === "interaction_no_data");
 
-  // 2026-07-11 pre-submission correctness check: "we checked this pair and nothing
-  // matched" and "we could not even determine a reactive group to check" are different
+  // "we checked this pair and nothing matched" and "we could not even determine a
+  // reactive group to check" are different
   // epistemic states — the row text already says which, but a reader scanning just the
   // aggregate heading needs the same distinction, not one umbrella "no established
   // interaction data" covering both. Split by BriefStatement.gap_status.
@@ -671,7 +664,7 @@ function renderSourceGroup(title, subtitle, statements, openByDefault, gloveStat
     details.appendChild(renderControlLine(s));
     // The glove-limitation disclosure is one global statement, never per-chemical —
     // attach it once, right after the first PPE line it's relevant to, wherever that
-    // falls (§6.6/§20.2: "attached to the PPE group, always visible, never collapsed").
+    // falls — attached to the PPE group, always visible, never collapsed.
     if (s.kind === "ppe" && gloveState.statement && !gloveState.rendered) {
       details.appendChild(renderGloveNotice(gloveState.statement));
       gloveState.rendered = true;
@@ -693,7 +686,7 @@ function renderChemicalRow(record, brief, gloveState) {
       s.kind === "not_small_molecule"
   );
 
-  // §20.2: one collapsed row per chemical — collapsed by default so the brief stops
+  // One collapsed row per chemical — collapsed by default so the brief stops
   // reading as a wall of text. Never truncated: everything is still here, just folded.
   const row = document.createElement("details");
   row.className = "chemical-block";
@@ -701,9 +694,9 @@ function renderChemicalRow(record, brief, gloveState) {
   const summary = document.createElement("summary");
   summary.className = "chemical-summary";
 
-  // §6.3/§G: the real GHS SVGs PubChem returns, 28px, never recoloured — the
-  // only shape and colour on the page besides the signal badges, anchoring
-  // the eye at each per-chemical row.
+  // The real GHS SVGs PubChem returns, 28px, never recoloured — the only shape
+  // and colour on the page besides the signal badges, anchoring the eye at each
+  // per-chemical row.
   if (hazardIdentity) {
     const urls = hazardIdentity.pictogram_urls || [];
     const labels = hazardIdentity.pictogram_labels || [];
@@ -735,7 +728,7 @@ function renderChemicalRow(record, brief, gloveState) {
     const badge = document.createElement("span");
     badge.className = "signal signal-badge signal-badge-" + hazardIdentity.signal_word.toLowerCase();
     badge.textContent = hazardIdentity.signal_word.toUpperCase();
-    // Fix 6: distinguish this from the app's own hazard labels (the plain-text DANGER on
+    // Distinguish this from the app's own hazard labels (the plain-text DANGER on
     // the overall banner and on interaction cards) — this one is PubChem's official GHS
     // signal word, not a PreCaution-authored severity call. The pill shape/fill already
     // differs visually from those plain-text labels; the tooltip makes the distinction
@@ -743,7 +736,7 @@ function renderChemicalRow(record, brief, gloveState) {
     badge.title = "GHS signal word: official hazard classification, from PubChem.";
     summary.appendChild(badge);
   }
-  // Phase 1b/2b: four distinct states — a genuine resolution miss ("no PubChem record")
+  // Four distinct states — a genuine resolution miss ("no PubChem record")
   // reads as a real gap; a protein/antibody correctly has no small-molecule record at all
   // (expected, not a miss); a fallback-sourced chemical has real hazard data, just not
   // from PubChem. None of these should read the same as each other.
@@ -804,9 +797,9 @@ function renderChemicalsSection(brief, chemicalRecords) {
   return section;
 }
 
-// §16.2/§D: chemical-looking phrases Stage 1 couldn't confidently resolve —
-// surfaced as gap cards, never silently dropped, same honest-omission weight
-// as a missing grounding heading.
+// Chemical-looking phrases Stage 1 couldn't confidently resolve — surfaced as
+// gap cards, never silently dropped, same honest-omission weight as a missing
+// grounding heading.
 function renderUnresolvedSection(brief) {
   const unresolved = brief.statements.filter((s) => s.kind === "unresolved_mention");
   if (!unresolved.length) return null;

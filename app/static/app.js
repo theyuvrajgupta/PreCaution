@@ -1,5 +1,5 @@
-// PreCaution — state machine (UI_Design_Spec.md §13) + stage log (§14) +
-// brief rendering (§15, delegated to render.js).
+// PreCaution — state machine + stage log + brief rendering
+// (the last delegated to render.js).
 //
 // Five states, one explicit variable, no routing:
 //   empty -> reading -> read
@@ -20,7 +20,7 @@ const DEMO_PROTOCOL = `1. Prepare piranha solution by slowly adding 30 mL of 30%
 5. Rinse the glassware used for the protein purification buffer (PBS with 0.02% sodium azide) and add that rinse to the same acid waste carboy.
 `;
 
-const MIN_LINE_MS = 150; // §14.2 rule 2: a line may linger, minimum 150ms visible
+const MIN_LINE_MS = 150; // a line may linger, minimum 150ms visible
 const BRIEF_HOLD_MS = 1500; // hold the completed stage log so its final "Composing the brief" line is seen, not flashed away by the transition to the rendered brief
 
 const appEl = document.getElementById("app");
@@ -52,8 +52,8 @@ const state = {
   extractionDetail: null, // {chemicals, steps, mixtures, unresolved} counts from the stream
   chemicalRecords: [], // [{name, cid, found, missing_sections, chemical_ids, concentration}, ...]
   lastError: null,
-  // 'error' (extraction/network failure) | 'no_chemicals' (§16.2: not an error,
-  // an explanation) — which flavor of the 'failed' state to render.
+  // 'error' (extraction/network failure) | 'no_chemicals' (not an error, an
+  // explanation) — which flavor of the 'failed' state to render.
   failureKind: "error",
 };
 
@@ -61,8 +61,8 @@ function setState(next) {
   state.current = next;
   appEl.dataset.state = next;
   // The bench pane's sticky thread is anchored within a container as tall as the
-  // (usually much longer) paper pane, so it can track scroll across the whole brief
-  // (§19.4). But that means whatever scroll position accumulated while the stage log
+  // (usually much longer) paper pane, so it can track scroll across the whole brief.
+  // But that means whatever scroll position accumulated while the stage log
   // was streaming carries straight into the freshly-rendered brief — the thread would
   // open mid-stuck, below the fold, instead of at the top. A brief that just finished
   // loading should always be seen from its own top. Same reasoning for landing back on
@@ -88,7 +88,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function showBenchThread(showThread) {
   // A <textarea> can't expose per-line layout, so once a Brief exists the bench
-  // pane swaps from the raw pasted text to structured step rows the thread (§6.1)
+  // pane swaps from the raw pasted text to structured step rows the thread
   // can attach to. The pasted text itself is never discarded — just hidden.
   protocolInput.hidden = showThread;
   benchControlsEl.hidden = showThread;
@@ -97,7 +97,7 @@ function showBenchThread(showThread) {
 }
 
 function render() {
-  // §17: only meaningful once there's a brief on the page.
+  // Only meaningful once there's a brief on the page.
   printBtn.hidden = state.current !== "read" && state.current !== "incomplete";
 
   switch (state.current) {
@@ -165,16 +165,16 @@ window.addEventListener("resize", () => {
 
 function renderReceipt() {
   clearChildren(panels.receipt);
-  // Fix 6: chemicals/steps counts already appear in the scan layer's first line right
-  // below — kept once, there; the receipt now reports only what it uniquely carries.
-  // Fix 4: "statements" -> "sourced claims", legible to a non-chemist reader.
+  // chemicals/steps counts already appear in the scan layer's first line right below —
+  // kept once, there; the receipt now reports only what it uniquely carries.
+  // "statements" -> "sourced claims", legible to a non-chemist reader.
   const line1 = document.createElement("p");
   const claimCount = state.brief.statements.length;
   line1.textContent = `Protocol read: ${claimCount} sourced claim${claimCount === 1 ? "" : "s"}`;
   panels.receipt.appendChild(line1);
 
-  // Phase 3b: the credit half of the footer's restraint half ("Claude read the protocol.
-  // Claude did not write the safety advice.") — near the top of the brief, not just the
+  // The credit half of the footer's restraint line ("Claude read the protocol. Claude did
+  // not write the safety advice.") — near the top of the brief, not just the
   // bottom, so a reader sees the division of labour before reading a single hazard claim,
   // not only after. Keep this to one line: what Claude structured, not a restatement of
   // every stage.
@@ -185,11 +185,9 @@ function renderReceipt() {
   panels.receipt.appendChild(line2);
 }
 
-// Full exact copy per UI_Design_Spec.md §16.1 — this is intrinsic to what
-// distinguishes the Incomplete state from Read, so it's built now rather
-// than deferred; positioning "above the scan layer" is already true (this
-// panel renders before brief-output in DOM order) — non-dismissibility is
-// inherent (no close control is offered).
+// This banner is intrinsic to what distinguishes the Incomplete state from Read.
+// It renders before brief-output in DOM order (so it sits above the scan layer) and
+// is non-dismissible (no close control is offered).
 function renderIncompleteBanner() {
   clearChildren(panels.incompleteBanner);
   const { brief, extractionDetail } = state;
@@ -215,10 +213,10 @@ function renderIncompleteBanner() {
   panels.incompleteBanner.append(heading, body, caveat, retryBtn);
 }
 
-// Covers UI_Design_Spec.md §16.2's "Extraction call fails (502)" case (and any
-// failure before the stream produced a single real event — see §D's freeze-
-// in-place handling in startReading for the mid-stream case, which does NOT
-// route through here) plus "No chemicals identified" — not an error, an
+// Covers the "Extraction call fails (502)" case (and any failure before the stream
+// produced a single real event — see the freeze-in-place handling in startReading for
+// the mid-stream case, which does NOT route through here) plus "No chemicals identified"
+// — not an error, an
 // explanation, so it gets its own copy and an offer to load the demo instead
 // of the danger-coloured "could not read" heading.
 function renderFailedPanel() {
@@ -237,8 +235,8 @@ function renderFailedPanel() {
 
   if (state.failureKind === "no_chemicals") {
     heading.textContent = "No chemicals identified.";
-    // §16.2 honesty (Pass B6): state what preCaution actually knows — that it found no
-    // chemicals — never that the text "isn't a protocol," which it has no way to judge.
+    // State what preCaution actually knows — that it found no chemicals — never that
+    // the text "isn't a protocol," which it has no way to judge.
     detail.textContent = "No chemicals were confidently identified in this text.";
 
     const demoOfferBtn = document.createElement("button");
@@ -265,7 +263,7 @@ function updateReadButtonEnabled() {
   readBtn.disabled = state.current === "reading" || protocolInput.value.trim().length === 0;
 }
 
-// --- Stage log: a paced queue over real events (§14.2) ---------------------
+// --- Stage log: a paced queue over real events ---------------------
 //
 // Rule 1 (never before its event): a render function is only enqueued once
 // the underlying SSE event has actually arrived — nothing here is scripted
@@ -318,7 +316,7 @@ function appendLogSubline(block, text, extraClass) {
   block.appendChild(p);
 }
 
-// §16.2 "Network dies mid-stream": freeze the log in place — turn the last
+// "Network dies mid-stream": freeze the log in place — turn the last
 // real event's line to the error colour and offer Retry — rather than
 // swapping to the full failed panel and hiding what already happened. Only
 // called when the stream had genuinely produced at least one real event;
@@ -424,7 +422,7 @@ async function startReading() {
       await sleep(BRIEF_HOLD_MS);
       state.brief = finalBrief;
       if (state.extractionDetail && state.extractionDetail.chemicals === 0) {
-        // §16.2: not an error, an explanation — routes through the 'failed' state's
+        // Not an error, an explanation — routes through the 'failed' state's
         // bench-unlock behaviour but with distinct copy (see renderFailedPanel).
         state.failureKind = "no_chemicals";
         setState("failed");
@@ -442,7 +440,7 @@ async function startReading() {
     await log.whenDrained();
     state.lastError = err instanceof Error ? err.message : String(err);
     if (streamStarted) {
-      // §16.2: the stream produced real events before dying — freeze the log in
+      // The stream produced real events before dying — freeze the log in
       // place rather than hiding it behind the full failed panel.
       freezeStageLogWithError();
     } else {
@@ -484,22 +482,22 @@ function resetToEmpty() {
   protocolInput.focus();
 }
 
-// §17: the brief has to leave the screen. Runs on the native print event
+// The brief has to leave the screen. Runs on the native print event
 // (button click OR the browser's own Ctrl+P / File>Print), so it fires no
 // matter how printing was triggered.
 function prepareForPrint() {
-  // §20/§17: nothing is ever lost, only folded — force every collapsible
+  // Nothing is ever lost, only folded — force every collapsible
   // group open for the printed copy, remembering prior state to restore.
   document.querySelectorAll(".chemical-block, .source-group, .gap-aggregate").forEach((el) => {
     el.dataset.wasOpen = el.open ? "1" : "0";
     el.open = true;
   });
 
-  // §21 print follow-up: on screen the no-data/could-not-check pairs collapse behind
-  // ONE disclosure toggle, but force-opening every group for print (above) used to mean
-  // N full duplicate-shaped cards — each with its own honest-omission sentence and its
-  // own citation chip — right after it, exactly the flood §21 exists to prevent, just
-  // relocated from screen to paper. Compact each aggregate to the SAME grouping the
+  // On screen the no-data/could-not-check pairs collapse behind ONE disclosure toggle;
+  // force-opening every group for print (above) would otherwise produce N full
+  // duplicate-shaped cards — each with its own honest-omission sentence and citation
+  // chip — right after it, relocating the same flood from screen to paper. Compact each
+  // aggregate to the SAME grouping the
   // screen already computed: the first pair keeps its full sentence + chip as the
   // category's one representative citation; every other row collapses to the compact
   // "name + name" label render.js precomputed into data-compact-label at normal render
@@ -521,9 +519,9 @@ function prepareForPrint() {
     });
   });
 
-  // §6.2/§17: a printed chip can't be clicked — turn it into a numbered
-  // reference and collect a references list, so the paper copy is still
-  // checkable, not just decorative.
+  // A printed chip can't be clicked — turn it into a numbered reference and
+  // collect a references list, so the paper copy is still checkable, not just
+  // decorative.
   const chips = Array.from(document.querySelectorAll(".chip[href]"));
   if (!chips.length) return;
 
@@ -570,7 +568,7 @@ window.addEventListener("beforeprint", prepareForPrint);
 window.addEventListener("afterprint", restoreAfterPrint);
 printBtn.addEventListener("click", () => window.print());
 
-// §22.2: the interaction-table panel — reachable from the no-data section's chip and
+// The interaction-table panel — reachable from the no-data section's chip and
 // from each hazard card's "View the full interaction table" link (render.js wires
 // both to this same function). Fetched once and cached: it's static reference data,
 // identical for every brief, not something that needs refetching per open.

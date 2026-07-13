@@ -3,7 +3,7 @@
 // Deliberately not EventSource — EventSource is GET-only, and the backend
 // requires POST (the protocol text is the request body). Reads the response
 // body as a stream and buffers until a full "event: X\ndata: Y\n\n" frame is
-// available, exactly matching UI_Design_Spec.md §14.3's wire format.
+// available.
 export async function* parseSSEStream(response) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();

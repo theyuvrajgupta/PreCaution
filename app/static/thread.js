@@ -1,5 +1,5 @@
-// The carryover thread (UI_Design_Spec.md §6.1) and the unverified marker
-// (§6.1a) — the two elements explicitly marked "never cut."
+// The carryover thread and the unverified marker — the two elements
+// explicitly marked "never cut."
 //
 // Renders the bench pane's step-by-step view (replacing the free-text
 // textarea once a Brief exists) plus a 44px gutter overlay: a token where a
@@ -17,19 +17,16 @@ import { cap } from "./render.js";
 
 const UNVERIFIED_TIP = "Claude read this from the protocol text. It was not looked up. Verify the step attribution.";
 
-// Fix 2 (pre-recording polish pass): the row already carries the full tooltip above
-// (UNVERIFIED_TIP, revealed on hover/focus of the whole row via aria-describedby — the
-// UI_Design_Spec.md §6.1a/§9-locked copy, untouched). But the "ᴜɴᴠ" glyph itself was
-// aria-hidden and carried no title of its own — a cold reader has no way to decode three
-// unexplained letters without first discovering the row is interactive. This gives the
-// marker glyph its own independent title/aria-label so hovering or inspecting it directly
-// explains itself, without altering the existing row-level tooltip or its locked wording.
+// The row already carries the full tooltip above (UNVERIFIED_TIP, revealed on hover/focus
+// of the whole row via aria-describedby). But the "ᴜɴᴠ" glyph itself was aria-hidden and
+// carried no title of its own — a cold reader has no way to decode three unexplained
+// letters without first discovering the row is interactive. Give the marker glyph its own
+// title/aria-label so hovering or inspecting it directly explains itself.
 const UNV_MARKER_TIP =
   "Unverified: Claude's read of the protocol text, not a database lookup. The only claim in this brief marked this way.";
 
-// Fix 3: a compact, always-visible key for the gutter's visual language — the thread,
-// diamonds, and chemical-id tokens encode real meaning (§6.1) but were previously
-// explained only in the design spec, never on the page itself.
+// A compact, always-visible key for the gutter's visual language — the thread, diamonds,
+// and chemical-id tokens encode real meaning that should be explained on the page itself.
 const GUTTER_LEGEND =
   "Gutter: line = chemical carried across steps · diamond = hazard onset · c1–c6 = chemical tokens.";
 
@@ -37,13 +34,12 @@ function clearChildren(el) {
   while (el.firstChild) el.removeChild(el.firstChild);
 }
 
-// §22: every step row is a step_context statement (always unverified=true), but
-// marking all of them made the marker wallpaper — when everything is flagged,
-// nothing is. Reserve the visible dotted-underline + ᴜɴᴠ marker for the one
-// claim that's genuinely load-bearing: a step where a NEW hazard forms because
-// something carried over from an earlier step (not freshly added there) — e.g.
-// "the spent piranha is still in the carboy." That specific attribution is
-// exactly what rests on Claude's read of the protocol, not a lookup (§3.3).
+// Every step row is a step_context statement (always unverified=true), but marking all
+// of them made the marker wallpaper — when everything is flagged, nothing is. Reserve the
+// visible dotted-underline + ᴜɴᴠ marker for the one claim that's genuinely load-bearing: a
+// step where a NEW hazard forms because something carried over from an earlier step (not
+// freshly added there) — e.g. "the spent piranha is still in the carboy." That specific
+// attribution is exactly what rests on Claude's read of the protocol, not a lookup.
 // Every other row gets a quiet section-level note instead (see buildStepRow).
 function computeLoadBearingSteps(steps, onsetAt) {
   const byNumber = new Map(steps.map((s) => [s.number, s]));
@@ -121,18 +117,12 @@ function buildStepRow(step, isLoadBearing, checkFlags) {
     row.appendChild(vessel);
   }
 
-  // Omission-detection (Build_Spec.md's omission-detection phase, §2e): CHECK is a
-  // SIBLING to the UNV marker above, never a reuse of it — UNV's scarcity (the one
-  // load-bearing carryover attribution) is itself load-bearing for the demo narration,
-  // and reusing it here would dilute that. Same family (quiet, secondary, clearly-
-  // Claude's-read), same position/weight/contrast as the Vessel line just above (not
-  // lighter — the global UI rule bans washed-out grey, and --muted-bench is already the
-  // "full readable contrast, secondary weight" token this pane uses for exactly this
-  // register). The CHECK word itself borrows --caution-bench (already used for GHS
-  // Warning signal words) so it reads as "worth a look," not danger-red and not a plain
-  // grey word indistinguishable from body text — reusing an existing token, not a new
-  // colour. Never fires on a step that already carries an interaction hazard (2d) —
-  // enforced in app/brief.py before this ever sees the flag, not here.
+  // CHECK is a SIBLING to the UNV marker above, never a reuse of it — UNV's scarcity (the
+  // one load-bearing carryover attribution) matters for the demo narration, and reusing it
+  // here would dilute it. Same quiet, secondary weight as the Vessel line above (the global
+  // UI rule bans washed-out grey); the CHECK word borrows --caution-bench (as used for GHS
+  // Warning signal words) so it reads as "worth a look," not danger-red. Never fires on a
+  // step that already carries an interaction hazard — enforced in app/brief.py, not here.
   for (const flag of checkFlags) {
     const check = document.createElement("p");
     check.className = "bench-step-check";
@@ -160,8 +150,8 @@ function pruneUnchangedVesselTicks(stepsEl, steps) {
   }
 }
 
-// Omission-detection (Build_Spec.md §2e): stepNumber -> [flag, ...]. Brief.statements
-// mixes every kind together (hazard_identity, interaction_hazard, omission_flag, ...) —
+// stepNumber -> [flag, ...]. Brief.statements mixes every kind together (hazard_identity,
+// interaction_hazard, omission_flag, ...) —
 // this is the one place that pulls just the omission_flag kind out for the bench pane,
 // mirroring computeOnsetAndHotSegments's shape immediately below for the hazard kind.
 function computeCheckFlagsByStep(statements) {
@@ -201,7 +191,7 @@ function drawGutter(gutterEl, stepsEl, steps, onsetAt, hotSegments) {
 
   // Marks are positioned absolute relative to gutterEl itself (its own top edge,
   // not the pane's) — gutterEl and stepsEl are now flex siblings inside the same
-  // sticky wrapper (#bench-sticky, §19.4), so this offset stays correct whether
+  // sticky wrapper (#bench-sticky), so this offset stays correct whether
   // the wrapper is in normal flow or currently pinned: both move by the same
   // viewport delta together, so the difference between their rects never changes.
   const paneTop = gutterEl.getBoundingClientRect().top;
@@ -293,9 +283,8 @@ function drawGutter(gutterEl, stepsEl, steps, onsetAt, hotSegments) {
   // one per step it persists through. The FIRST diamond at a step sits at exactly
   // `center` — the same coordinate the line segments above/below terminate at
   // (line.style.top / centerByStep.get(...) have no offset) — so the thread meets
-  // the diamond cleanly at both ends instead of stopping short with a gap (fix,
-  // 2026-07-13: a stray "+18" base offset here had every diamond floating 18px
-  // below the row centre the line actually connects to). A SECOND diamond at the
+  // the diamond cleanly at both ends instead of stopping short with a gap. A SECOND
+  // diamond at the
   // same step (two pairs onsetting on the same row) still needs real separation
   // from the first — a rotated 13px square's diagonal is ~18.4px — so only i>0
   // gets pushed further down, never the first.
@@ -323,15 +312,11 @@ export function renderThread(gutterEl, stepsEl, { steps, statements }) {
   const loadBearingSteps = computeLoadBearingSteps(steps, onsetAt);
   const checkFlagsByStep = computeCheckFlagsByStep(statements);
 
-  // §22: one quiet section-level note instead of marking every row — the
-  // per-row marker is reserved for the load-bearing claim(s) only.
-  // Phase 3a: names what the reading actually did (resolving a named mixture into its
-  // reagents, tracking a chemical into a shared vessel across steps) rather than just
-  // saying "Claude read this" in the abstract — this structural read is Claude's one
-  // high-leverage job in the pipeline, and it was invisible in the UI before this.
-  // Trim pass (2026-07-13): three lines of prose before step 1 even starts was too much
-  // of a toll-gate — same two concrete facts (mixture resolution, vessel tracking), one
-  // sentence instead of a wind-up clause plus a payoff clause.
+  // One quiet section-level note instead of marking every row — the per-row marker is
+  // reserved for the load-bearing claim(s) only. It names what the reading actually did
+  // (resolving a named mixture into its reagents, tracking a chemical into a shared vessel
+  // across steps) rather than saying "Claude read this" in the abstract — this structural
+  // read is Claude's one high-leverage job in the pipeline.
   const note = document.createElement("p");
   note.className = "bench-steps-note";
   note.textContent =
@@ -339,7 +324,7 @@ export function renderThread(gutterEl, stepsEl, { steps, statements }) {
     "A structural read, not a lookup.";
   stepsEl.appendChild(note);
 
-  // Fix 3: subtle, one line, placed once — not repeated per row, not a boxed panel.
+  // Subtle, one line, placed once — not repeated per row, not a boxed panel.
   const legend = document.createElement("p");
   legend.className = "mono bench-steps-legend";
   legend.textContent = GUTTER_LEGEND;
