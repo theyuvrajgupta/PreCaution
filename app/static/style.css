@@ -1,42 +1,41 @@
-/* PreCaution — design tokens + layout (UI_Design_Spec.md §1-9, PART C §19-24).
-   Anti-patterns (§3) are hard constraints, not style suggestions:
+/* PreCaution — design tokens + layout.
+   Anti-patterns, treated as hard constraints, not suggestions:
    no cream+serif+terracotta, no near-black+acid accent, no purple, no
    gradients, no rounded-2xl+shadow-lg, no emoji icons, no sparkles/AI
    badges/chat bubbles/typing indicators, no skeleton shimmer, no
    broadsheet/hairline-rules/newspaper-columns, no green anywhere, no
    hero section. This tool never says "safe" — the palette has no
-   success colour (§4).
+   success colour.
 
-   §4.1, the rule that governs every token below: every text token is bound
-   to the surface it is legal on. --muted-paper must NEVER appear on
-   --bench, and no --*-bench token may appear on a light surface. v1 defined
-   one --muted #67706F for both surfaces; on --bench that was ~3.6:1 and
-   failed WCAG AA — that bug is why this file is split the way it is. */
+   The rule that governs every token below: every text token is bound to the
+   surface it is legal on. --muted-paper must NEVER appear on --bench, and no
+   --*-bench token may appear on a light surface. A single --muted shared across
+   both surfaces was ~3.6:1 on --bench and failed WCAG AA — that is why this file
+   splits every token by surface. */
 
 :root {
-  /* Dark surfaces (§4.3) */
+  /* Dark surfaces */
   --bench: #14171a;
   --bench-raised: #1d2124;
-  /* §4.1's own 3:1 non-text floor, checked against the spec's literal swatch: it
-     fails (~1.55:1) — the same class of spec bug §4.1 itself calls out for v1's
-     --muted. Darkened to the nearest value that actually clears 3:1. */
+  /* The 3:1 non-text floor: the nominal swatch fails (~1.55:1), darkened to the
+     nearest value that actually clears 3:1. */
   --line-bench: #5e6567;
 
-  /* Light surfaces (§4.2) — three, not one flat pane */
+  /* Light surfaces — three, not one flat pane */
   --field: #e2e6e3; /* the pane BEHIND the brief */
   --sheet: #fafaf8; /* the brief itself, a bounded document on the field */
   --sheet-sunk: #edefeb; /* card fills inside the sheet */
-  /* Same fix as --line-bench: the spec's literal #C9CFCB is ~1.51:1 on --sheet,
-     failing the 3:1 non-text floor §4.1 itself declares non-negotiable. */
+  /* Same fix as --line-bench: the nominal #C9CFCB is ~1.51:1 on --sheet, failing
+     the non-negotiable 3:1 non-text floor. */
   --line: #8e928d;
 
-  /* Text, paired to surface (§4.4) */
+  /* Text, paired to surface */
   --ink: #14171a;
   --ink-bench: #edefec;
   --muted-paper: #5c6664;
   --muted-bench: #96a09d;
 
-  /* Semantic colour, also surface-paired (§4.5) — no success colour, ever */
+  /* Semantic colour, also surface-paired — no success colour, ever */
   --danger: #ce0e2d;
   --danger-bench: #ff4d63;
   --caution: #8a5a00;
@@ -46,7 +45,7 @@
   --gap: var(--muted-paper); /* gaps render in slate, never red, never green */
   --gap-bench: var(--muted-bench);
 
-  /* §5 type */
+  /* Type */
   --font-signal: "Archivo", Arial, sans-serif;
   --font-body: "Public Sans", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -59,7 +58,7 @@
 
   /* 44px wasn't enough to give the spine (line + diamond) and the chemical-id
      tokens their own non-overlapping columns — widened so both fit with room
-     to spare (§6.1 cosmetic fix: junctions were reading as clutter). */
+     to spare — junctions were reading as clutter. */
   --gutter-width: 56px;
 }
 
@@ -136,8 +135,8 @@ button:disabled {
 }
 
 /* --- Masthead (brand mark + wordmark) --------------------------------------
-   Not a hero section (§23 forbids that on the empty paper pane specifically —
-   this is persistent chrome across every state, no copy/CTA/imagery). Sits on
+   Not a hero section — this is persistent chrome across every state, no
+   copy/CTA/imagery. Sits on
    --field: a third, neutral tone distinct from both bench-dark and
    paper-white, so it reads as the room containing both surfaces rather than
    belonging to either one. */
@@ -206,7 +205,7 @@ button:disabled {
   font-weight: 800;
 }
 
-/* --- App shell / two-pane layout (§7) ----------------------------------- */
+/* --- App shell / two-pane layout ---------------------------------------- */
 
 .app {
   display: flex;
@@ -250,7 +249,7 @@ button:disabled {
   justify-content: center;
 }
 
-/* §4.2: the brief is a bounded sheet on the field, max-width ~72ch, with real
+/* The brief is a bounded sheet on the field, max-width ~72ch, with real
    margins — not a flat white pane touching the edges of the viewport. */
 .sheet {
   width: 100%;
@@ -261,15 +260,15 @@ button:disabled {
   padding: 2rem;
 }
 
-/* --- Bench pane: gutter + step rows, sticky together (§19.4) ------------- */
+/* --- Bench pane: gutter + step rows, sticky together -------------------- */
 
 .bench-content {
   max-width: 640px;
 }
 
-/* §19.4: sticky so the gutter+steps hold in view as the (usually much taller)
+/* Sticky so the gutter+steps hold in view as the (usually much taller)
    paper pane scrolls, instead of leaving a black void once the shorter bench
-   content scrolls out of frame — "the most visible flaw in the build."
+   content scrolls out of frame.
    gutterEl and stepsEl are flex siblings here, not an absolute overlay, so
    they move in exact lockstep whether pinned or in normal flow — see
    thread.js's comment on why that keeps the gutter-mark math correct. */
@@ -292,7 +291,7 @@ button:disabled {
   min-width: 0;
 }
 
-/* Bench-pane twin of .receipt-credit (2026-07-13): both are a full sentence Claude
+/* Bench-pane twin of .receipt-credit: both are a full sentence Claude
    authored about its own read of the protocol, load-bearing per the global UI rules
    ("full contrast, and containment where it needs to stand apart"), not a caption like
    the legend below it (which stays --muted-bench per the "Gutter:"/"Vessel:" carve-out).
@@ -309,8 +308,8 @@ button:disabled {
   color: var(--ink-bench);
 }
 
-/* Fix 3 (pre-recording polish pass): the gutter's visual language (thread/diamond/
-   tokens) explained in one quiet, always-visible line — smaller than the note above it
+/* The gutter's visual language (thread/diamond/tokens) explained in one quiet,
+   always-visible line — smaller than the note above it
    so it reads as a caption, not a second heading. */
 .bench-steps-legend {
   color: var(--muted-bench);
@@ -318,7 +317,7 @@ button:disabled {
   margin: -0.6rem 0 1rem;
 }
 
-/* --- Carryover thread: gutter marks (§6.1) --------------------------------
+/* --- Carryover thread: gutter marks ---------------------------------------
    Two columns, not one shared 0-44px scrum: the spine (line + diamond) owns
    0-~19px, centred on x=9.5px; the chemical-id tokens (dot + label) start at
    24px, clearing the diamond's rotated bounding box (~18.7px) with room to
@@ -335,7 +334,7 @@ button:disabled {
 }
 
 /* --danger, not --danger-bench: the thread is a graphic (3:1 floor), not text
-   — spec §4.5 explicitly carves this out. The signature element of the whole
+   — the semantic-colour rule carves this out. The signature element of the whole
    app (the one asset no per-chemical checklist tool has) — sized to read as
    such, not as a thin rule. */
 .gutter-line-hot {
@@ -407,8 +406,8 @@ button:disabled {
   margin: 0.3em 0 0;
 }
 
-/* Omission-detection (Build_Spec.md §2e) — CHECK is a sibling to the Unverified
-   marker below, never a reuse of it. The CHECK body is a FINDING, not a machine
+/* CHECK is a sibling to the Unverified marker below, never a reuse of it.
+   The CHECK body is a FINDING, not a machine
    annotation: proportional body sans at full --ink-bench contrast, the same
    treatment as the step text itself, so it stops reading as a dull grey footnote.
    Only the CHECK tag stays in the machine-label register (mono, amber), like the
@@ -424,7 +423,7 @@ button:disabled {
   font-weight: 700;
 }
 
-/* --- Unverified marker (§6.1a, narrowed by §22) — trust seam, never styled
+/* --- Unverified marker — trust seam, never styled
    as an error. Only the load-bearing claim's row carries this now; every
    other row gets the quiet section-level note instead (.bench-steps-note). */
 
@@ -458,8 +457,8 @@ button:disabled {
   display: none;
 }
 
-/* Fix 4 (pre-recording polish pass): same tooltip visual language as .unverified-tip
-   above, generalised for scan-layer jargon terms ("grounded", "PPE limitation", "no GHS
+/* Same tooltip visual language as .unverified-tip above, generalised for
+   scan-layer jargon terms ("grounded", "PPE limitation", "no GHS
    hazard classification") that a non-chemist reader can't be expected to already know. */
 .jargon-term {
   text-decoration: underline dotted var(--muted-paper);
@@ -520,7 +519,7 @@ button:disabled {
 }
 
 /* Locked (Reading/Read/Incomplete states): non-editable, but NOT greyed —
-   per §13, "bench pane locks (not greyed, just non-editable)". */
+   the bench pane locks, it isn't greyed out. */
 .protocol-input[readonly] {
   opacity: 1;
   cursor: default;
@@ -570,8 +569,8 @@ button:disabled {
    there put near-invisible light text on a light sheet. Scoped to .sheet,
    not .paper-panel: the print button is a sheet child but not itself a
    .paper-panel, and was still broken until this was widened to catch it.
-   Same §4.1 "tokens never cross surfaces" rule, just found on a component
-   this pass touches rather than a text style. */
+   Same "tokens never cross surfaces" rule, just on a component rather than a
+   text style. */
 .sheet .btn-quiet {
   color: var(--ink);
   border-color: var(--line);
@@ -604,7 +603,7 @@ button:disabled {
   max-width: 40ch;
 }
 
-/* §23: the empty paper pane was 90% dead space — the scope boundary (what
+/* The empty paper pane was 90% dead space — the scope boundary (what
    PreCaution does / explicitly does not do) belongs here, on-brand, so a
    judge landing cold understands the tool before pressing anything. */
 .scope-boundary {
@@ -628,7 +627,7 @@ button:disabled {
   letter-spacing: 0.06em;
 }
 
-/* --- Stage log (§14) ------------------------------------------------------ */
+/* --- Stage log ------------------------------------------------------------ */
 
 .stage-log {
   font-family: var(--font-mono);
@@ -662,12 +661,11 @@ button:disabled {
 
 /* --- Receipt (summary once Read/Incomplete) ------------------------------- */
 
-/* Type revamp (2026-07-13): this is a short sentence ("Protocol read — N sourced
-   claims"), not an identifier list — mono is reserved for CIDs/H-codes/chemical ids
-   (§5), and applying it to prose read as a technical-readout tone that didn't fit what
-   the line actually says. Body font, a size between mono's 12px and full body's 15px so
-   it still reads as secondary to the scan layer below it (§15's ranking), not as loud as
-   a paragraph. */
+/* This is a short sentence ("Protocol read — N sourced claims"), not an identifier
+   list — mono is reserved for CIDs/H-codes/chemical ids, and applying it to prose read
+   as a technical-readout tone that didn't fit what the line actually says. Body font, a
+   size between mono's 12px and full body's 15px so it still reads as secondary to the
+   scan layer below it, not as loud as a paragraph. */
 .receipt {
   font-family: var(--font-body);
   font-size: 13px;
@@ -679,11 +677,11 @@ button:disabled {
   margin: 0;
 }
 
-/* Phase 3b, boxed (2026-07-13 revamp): this line shared --muted-paper with 40+
-   unrelated pieces of text (eyebrows, empty-state copy, stage-log sublines) and read as
-   more of the same grey, not a distinct credit. Reuses the gap-card's quiet container
-   language (--sheet-sunk fill, --line border, 2px radius — no shadow, no gradient, per
-   §3's anti-patterns) with a --source (provenance blue, not danger/caution) left accent,
+/* This line shared --muted-paper with 40+ unrelated pieces of text (eyebrows,
+   empty-state copy, stage-log sublines) and read as more of the same grey, not a
+   distinct credit. Reuses the gap-card's quiet container language (--sheet-sunk fill,
+   --line border, 2px radius — no shadow, no gradient) with a --source (provenance blue,
+   not danger/caution) left accent,
    since this line is itself about attribution. Full --ink, not muted, now that it's
    visually contained — the box does the "this is secondary" work, the text doesn't also
    need to whisper. */
@@ -698,15 +696,15 @@ button:disabled {
   color: var(--ink);
 }
 
-/* --- Scan layer (§15 item 1, §23: the loudest thing on the page) ---------- */
+/* --- Scan layer (the loudest thing on the page) --------------------------- */
 
 .scan-layer {
   margin-bottom: 2rem;
 }
 
-/* Presentation pass (2026-07-12, second round): a bare "DANGER" headline still read as a
-   verdict on the whole protocol even after Fix 6 shrank it — the fix wasn't size, it was
-   that the word stood alone with nothing binding it to a bounded, countable finding. The
+/* A bare "DANGER" headline read as a verdict on the whole protocol even when shrunk —
+   the fix wasn't size, it was that the word stood alone with nothing binding it to a
+   bounded, countable finding. The
    severity word now sits in a row next to a readable count (.scan-signal-row /
    .scan-verdict / .scan-count), with a step-localized locator line underneath
    (.scan-locator). The zero-hazard headline still uses plain .signal (no row, nothing to
@@ -743,8 +741,8 @@ button:disabled {
   max-width: 72ch;
 }
 
-/* Type revamp (2026-07-13): same reasoning as .receipt above — these lines read as
-   counted sentences ("6 chemicals grounded · ..."), not identifier lists, so mono read
+/* Same reasoning as .receipt above — these lines read as counted sentences
+   ("6 chemicals grounded · ..."), not identifier lists, so mono read
    as a colder technical-readout tone than the words actually call for. Body font,
    13px — still visibly quieter/smaller than a hazard card's 15px body text, so the scan
    layer's own hierarchy (headline > locator > these counts) is unchanged, just the
@@ -757,7 +755,7 @@ button:disabled {
   max-width: 72ch;
 }
 
-/* --- Cards: hazard (§6.4) / gap (§6.5) / glove notice (§6.6) -------------- */
+/* --- Cards: hazard / gap / glove notice ----------------------------------- */
 
 /* --sheet-sunk, not --sheet: a real depth cue (a second, slightly darker paper
    layer sitting IN the sheet) without the banned drop-shadow/rounded-2xl combo
@@ -793,7 +791,7 @@ button:disabled {
 
 /* Authored framing line — which chemicals, combined directly or one carried over.
    Deliberately styled as normal body text, NOT muted: this is a real, load-bearing
-   claim (§3.3), just not a CAMEO quote, so it must read as confidently as the quote
+   claim, just not a CAMEO quote, so it must read as confidently as the quote
    itself — only its lack of a chip marks it as authored rather than sourced. */
 .hazard-card .card-lead-in {
   font-weight: 600;
@@ -813,7 +811,7 @@ button:disabled {
   max-width: 72ch;
 }
 
-/* §22.2: second entry point into the interaction-table panel — a plain understated
+/* Second entry point into the interaction-table panel — a plain understated
    link rather than a full .chip, since it isn't the citation for the quote above it
    (that's still the real .chip), just a way to reach the whole small table. */
 .interaction-table-link {
@@ -866,7 +864,7 @@ button:disabled {
   margin-bottom: 0.3em;
 }
 
-/* §21: aggregate card — one collapsed row for "N pairs checked", not one gap
+/* Aggregate card — one collapsed row for "N pairs checked", not one gap
    card per pair. Still fully inspectable (expands to the full list), still
    counted in the scan layer. Same visual weight as a hazard card. */
 .gap-aggregate-summary {
@@ -896,16 +894,16 @@ button:disabled {
   color: var(--muted-paper);
 }
 
-/* §22: the no-data cards used to start right after the hazard cards with no
-   framing — a header ("checked", never "no data" — reads as an action, not an
-   error), one plain-language sentence, then two separately-labelled sub-groups.
+/* Without framing the no-data cards would start right after the hazard cards —
+   a header ("checked", never "no data" — reads as an action, not an error), one
+   plain-language sentence, then two separately-labelled sub-groups.
    --gap (slate), never --danger: these are absence-of-finding, not findings. */
 .no-data-section {
   margin-top: 1.5rem;
 }
 
-/* Presentation pass (2026-07-12, second round): marks the transition from the real
-   hazard-card findings into this section, so it doesn't read as more of the same kind of
+/* Marks the transition from the real hazard-card findings into this section, so
+   it doesn't read as more of the same kind of
    thing. Reuses the already-established .scope-boundary divider pattern (same rule +
    spacing) rather than inventing new visual language. Only applied when there are hazard
    cards above to divide from — see renderNoDataSection's hasHazardsAbove. */
@@ -933,7 +931,7 @@ button:disabled {
   margin: 0 0 0.5em;
 }
 
-/* --- Provenance chip (§6.2) — paper/sheet only, chips never appear on bench */
+/* --- Provenance chip — paper/sheet only, chips never appear on bench ------ */
 
 .chip {
   display: inline-block;
@@ -954,10 +952,9 @@ a.chip:focus-visible,
   color: var(--sheet);
 }
 
-/* §22.2: the "PreCaution interaction table" reference used to be an inert <span>
-   (renderChip never links it — these statements carry no source_url) that still
-   looked exactly like a clickable chip. Now it's a real <button class="chip
-   chip-action"> that opens the in-app panel — this resets the browser's own button
+/* The "PreCaution interaction table" reference is a real <button class="chip
+   chip-action"> that opens the in-app panel, not an inert <span> that merely
+   looks like a clickable chip. This resets the browser's own button
    chrome so it reads identically to the <a>/<span> chips beside it; .chip above
    already supplies the border/padding/colour/font every chip shares. */
 .chip-action {
@@ -971,7 +968,7 @@ a.chip:focus-visible,
   outline-offset: 2px;
 }
 
-/* --- Interaction hazards + per-chemical controls sections (§15 items 2-3) - */
+/* --- Interaction hazards + per-chemical controls sections ----------------- */
 
 .interaction-section,
 .unresolved-section,
@@ -979,7 +976,7 @@ a.chip:focus-visible,
   margin-bottom: 2rem;
 }
 
-/* §20: one collapsed row per chemical, expanded into source-labelled groups —
+/* One collapsed row per chemical, expanded into source-labelled groups —
    this is the fix for the per-chemical wall. Never truncated, only folded. */
 
 .chemical-block {
@@ -998,7 +995,7 @@ a.chip:focus-visible,
   list-style: none;
 }
 
-/* §6.3: real GHS SVGs, exactly as PubChem returns them — no recolour, no shadow. */
+/* Real GHS SVGs, exactly as PubChem returns them — no recolour, no shadow. */
 .ghs-pictogram {
   width: 28px;
   height: 28px;
@@ -1009,7 +1006,7 @@ a.chip:focus-visible,
   display: none;
 }
 
-/* §F: <summary> is natively keyboard-focusable (Tab reaches it, Enter/Space
+/* <summary> is natively keyboard-focusable (Tab reaches it, Enter/Space
    toggles it) — needs the same visible ring as every other interactive
    element, not just the elements that happen to be <button>/<a>. */
 .chemical-summary:focus-visible,
@@ -1033,9 +1030,9 @@ a.chip:focus-visible,
   padding-bottom: 0.75em;
 }
 
-/* Grounded gradation (§4.6): PubChem's own GHS signal word per chemical,
+/* Grounded gradation: PubChem's own GHS signal word per chemical,
    Danger -> --danger, Warning -> --caution. Free depth, not invented — and
-   the word itself is always present too (§4.7: never colour alone). */
+   the word itself is always present too (never colour alone). */
 .signal-badge {
   padding: 0.1em 0.5em;
   border-radius: 2px;
@@ -1102,7 +1099,7 @@ a.chip:focus-visible,
   margin-left: 0.4em;
 }
 
-/* --- Incomplete banner (full version built in §2.7 — minimal shell now) -- */
+/* --- Incomplete banner ---------------------------------------------------- */
 
 .incomplete-banner {
   border-left: 3px solid var(--danger);
@@ -1117,7 +1114,7 @@ a.chip:focus-visible,
   margin-bottom: 0.4em;
 }
 
-/* --- Failed panel (full per-case copy built in §2.8 — basic version now) - */
+/* --- Failed panel --------------------------------------------------------- */
 
 .failed-panel p {
   max-width: 48ch;
@@ -1127,13 +1124,13 @@ a.chip:focus-visible,
   margin-top: 0.5rem;
 }
 
-/* --- Print (§17 — the brief has to leave the screen) ---------------------- */
+/* --- Print (the brief has to leave the screen) ---------------------------- */
 
 .print-btn {
   margin-top: 1.5rem;
 }
 
-/* --- Footer (§9 — always present, one line) ------------------------------ */
+/* --- Footer — always present, one line ------------------------------------ */
 
 .app-footer {
   font-size: var(--size-eyebrow);
@@ -1143,7 +1140,7 @@ a.chip:focus-visible,
   border-top: 1px solid var(--line);
 }
 
-/* --- Motion (§8) — one restrained moment, nothing else ------------------- */
+/* --- Motion — one restrained moment, nothing else ------------------------- */
 
 @keyframes rise-in {
   from {
@@ -1170,7 +1167,7 @@ a.chip:focus-visible,
   }
 }
 
-/* --- Interaction-table panel (§22.2) --------------------------------------
+/* --- Interaction-table panel ----------------------------------------------
    Native <dialog>, shown via .showModal() — gives us backdrop, top-layer
    stacking, and Escape-to-close for free, matching "click -> panel opens ->
    rows -> close, no sorting/filtering/pagination/search." */
@@ -1249,7 +1246,7 @@ a.chip:focus-visible,
   outline-offset: 2px;
 }
 
-/* --- Print (§17): "a bench needs paper" -----------------------------------
+/* --- Print: "a bench needs paper" -----------------------------------------
    Groups are force-opened and chips relabelled as numbered references by
    app.js's beforeprint/afterprint handlers (prepareForPrint/restoreAfterPrint)
    — this stylesheet handles everything that's pure presentation. */
@@ -1272,7 +1269,7 @@ a.chip:focus-visible,
     display: none;
   }
 
-  /* §22.2: the panel is a screen-only affordance — paper can't open a dialog.
+  /* The panel is a screen-only affordance — paper can't open a dialog.
      A closed <dialog> already renders display:none by default; this just
      guards the (unreachable in practice) case of printing while it's open. */
   .interaction-table-dialog,
@@ -1280,7 +1277,7 @@ a.chip:focus-visible,
     display: none !important;
   }
 
-  /* Bench pane -> plain numbered protocol steps, no dark fill (§17). */
+  /* Bench pane -> plain numbered protocol steps, no dark fill. */
   .pane-bench {
     background: white;
     color: black;
@@ -1301,7 +1298,7 @@ a.chip:focus-visible,
   }
 
   .bench-gutter {
-    display: none; /* the thread is a screen-only graphic; everything it encodes is already text (§18) */
+    display: none; /* the thread is a screen-only graphic; everything it encodes is already text */
   }
 
   .bench-step {
@@ -1323,7 +1320,7 @@ a.chip:focus-visible,
     font-weight: 700;
   }
 
-  /* .bench-steps-note picked up a dark-pane box fill/border on screen (2026-07-13) —
+  /* .bench-steps-note picks up a dark-pane box fill/border on screen —
      reset both for paper, same treatment as .bench-step just above, so it prints as
      plain text on white, not a dark box. */
   .bench-steps-note {
@@ -1340,7 +1337,7 @@ a.chip:focus-visible,
     display: none; /* the hover/focus tooltip has no meaning on paper */
   }
 
-  /* §6.1a/§17: "[unverified]" survives the journey even though the tooltip can't. */
+  /* "[unverified]" survives the journey even though the tooltip can't. */
   .unverified-marker {
     font-size: 0;
   }
@@ -1350,7 +1347,7 @@ a.chip:focus-visible,
     font-size: var(--size-mono);
   }
 
-  /* Paper pane: the brief prints in full, in the §15 order — full width, no
+  /* Paper pane: the brief prints in full, in reading order — full width, no
      field/sheet distinction needed once it's already on actual paper. */
   .pane-paper {
     background: white;
@@ -1369,7 +1366,7 @@ a.chip:focus-visible,
     display: none; /* nothing to print before a brief exists */
   }
 
-  /* §20/§17: print expands everything — groups are force-opened by
+  /* Print expands everything — groups are force-opened by
      prepareForPrint; the ▸/▾ disclosure triangle is a screen-only affordance. */
   .chemical-summary::before,
   .source-group-summary::before,
@@ -1388,7 +1385,7 @@ a.chip:focus-visible,
     break-inside: avoid;
   }
 
-  /* .chemical-block (§20.2's per-chemical <details>) is deliberately excluded
+  /* .chemical-block (the per-chemical <details>) is deliberately excluded
      from break-inside: avoid above — fully expanded, it routinely runs several
      pages (e.g. sodium azide's NIOSH/ERG content), so "avoid" can never be
      honoured. Chromium's print engine still tries: it pushes the whole block to
@@ -1401,7 +1398,7 @@ a.chip:focus-visible,
   }
 
   /* Chips print as numbered references, not boxed links — prepareForPrint
-     relabels them "[n]" and appends #print-footnotes (§6.2/§17). */
+     relabels them "[n]" and appends #print-footnotes. */
   .chip {
     border: none;
     padding: 0;
@@ -1424,7 +1421,7 @@ a.chip:focus-visible,
     animation: none;
   }
 
-  /* §9: the footer prints on every page — position:fixed repeats per printed
+  /* The footer prints on every page — position:fixed repeats per printed
      page in Chromium's pagination. */
   .app-footer {
     position: fixed;
