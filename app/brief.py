@@ -5,18 +5,17 @@ per-chemical ChemicalHazardProfile, and ChemicalPairFinding) into a Brief —
 a list of attributed BriefStatement objects a UI can render directly.
 
 Deliberately pure and deterministic: no network calls, no Anthropic calls.
-This is a design decision, not just a cost-saving default (see
-private/Build_Spec.md §4.5 and the Stage 4 plan) — with no generation step
-in this module, there is no possibility of an ungrounded claim slipping into
-the render layer. Every BriefStatement.source_ref traces back to a specific
-field on ChemicalHazardProfile or ChemicalPairFinding; this is checked by
-tests/test_brief.py, not just asserted here.
+This is a design decision, not just a cost-saving default — with no generation
+step in this module, there is no possibility of an ungrounded claim slipping
+into the render layer. Every BriefStatement.source_ref traces back to a
+specific field on ChemicalHazardProfile or ChemicalPairFinding; this is checked
+by tests/test_brief.py, not just asserted here.
 
 Composition may reformat and structure retrieved text (labels, punctuation,
 splitting PubChem's pipe-joined snippets into clear sentences) but must
 never add an adjective, quantity, or claim that isn't already present in the
 source field. That line is what keeps the "never introduce a claim" rule
-(Build_Spec.md §4.3) intact under a rewrite.
+intact under a rewrite.
 """
 
 from app.interaction_matrix import InteractionVerdict
@@ -46,14 +45,13 @@ _SAFETY_NOTE_KIND = {
 # CAMEO's own reactive-group taxonomy (surfaced live via app/pubchem.py's "Reactive
 # Group" heading) includes this as a genuine assignment, not an absence of data — e.g.
 # nitrogen is classified this way. It's a property of the CHEMICAL, so it's stated once
-# per chemical here, never once per pair it happens to co-occur with (pre-freeze fix,
-# 2026-07-11: a chemical present in N co-present pairs used to repeat the identical
-# classification sentence N times in the interaction section's no-data list).
+# per chemical here, never once per pair it happens to co-occur with (which would repeat
+# the identical classification sentence for every such pair).
 NOT_REACTIVE_GROUP = "Not Chemically Reactive"
 
 # Short noun form of a missing_sections heading, for the AGGREGATED per-chemical gap
-# statement (item 3, 2026-07-10: one card per chemical, not one per missing heading —
-# five missing headings used to mean five near-identical "no data" cards per chemical).
+# statement (one card per chemical, not one per missing heading — otherwise five missing
+# headings would mean five near-identical "no data" cards per chemical).
 _MISSING_SECTION_SHORT_LABEL = {
     "GHS Classification": "GHS classification",
     "Personal Protective Equipment (PPE)": "PPE",
@@ -68,7 +66,8 @@ def _join_with_or(items: list[str]) -> str:
         return items[0]
     return f"{', '.join(items[:-1])} or {items[-1]}"
 
-# Verbatim per UI_Design_Spec.md §6.6 — this is exact required copy, not paraphrased.
+
+# Verbatim required copy, not paraphrased.
 _GLOVE_DISCLOSURE_TEXT = (
     "The PPE guidance above is what PubChem publishes. Compound-specific glove material "
     "must be confirmed against SDS Section 8 and the manufacturer's resistance data. "
@@ -88,8 +87,8 @@ def _cap(text: str) -> str:
     """First-letter capitalization only — never .capitalize(), which would lowercase
     the rest of the string too (mangling e.g. "NaN3 reacts..." into "Nan3 reacts...").
     Chemical names are correctly lowercase mid-sentence (they're not proper nouns); this
-    exists only for the handful of statements where one happens to lead a rendered block,
-    which UI_Design_Spec.md §9's sentence-case rule still requires a capital for."""
+    exists only for the handful of statements where one happens to lead a rendered block
+    and so needs a leading capital."""
     return text[:1].upper() + text[1:] if text else text
 
 
@@ -159,7 +158,7 @@ def _chemical_statements(chemical: Chemical, profile: ChemicalHazardProfile) -> 
 
     if not profile.found:
         if profile.fallback_source is not None:
-            # Phase 2: PubChem genuinely has no record (found stays False, an accurate fact
+            # PubChem genuinely has no record (found stays False, an accurate fact
             # about PubChem specifically), but a real, hand-verified supplier SDS does. Reuses
             # hazard_identity's kind/shape (this genuinely is a hazard classification, just
             # from a different verified source) so it renders in the same GHS-classification
@@ -186,7 +185,7 @@ def _chemical_statements(chemical: Chemical, profile: ChemicalHazardProfile) -> 
         if profile.not_small_molecule:
             # A correct, expected absence — proteins aren't small molecules, so PubChem's
             # small-molecule database was never going to have a record. Reuses the gap
-            # card's visual container (§21's established pattern for "Not Chemically
+            # card's visual container (the same pattern used for "Not Chemically
             # Reactive") with a distinct heading, so it reads as a classification, not a
             # failure — never the same wording as a genuine resolution miss below.
             statements.append(
@@ -265,7 +264,7 @@ def _chemical_statements(chemical: Chemical, profile: ChemicalHazardProfile) -> 
             continue
         # One statement per excerpt, not per heading — a heading can cite more than
         # one authority (e.g. both NIOSH and ERG under PPE), and collapsing them into
-        # one blob is exactly the "per-chemical wall" problem §20 exists to fix.
+        # one blob is exactly the "per-chemical wall" problem this grouping exists to fix.
         for excerpt in note.excerpts:
             statements.append(
                 BriefStatement(
@@ -330,8 +329,8 @@ def _origin_phrase(
     # first added to the protocol, and when it entered the vessel this finding is
     # actually about — these can differ (added in a beaker in step 1, poured into a
     # waste carboy in step 4), and naming only the origin step implies false continuity
-    # in one container (2026-07-10 item-3 follow-up). Name both when they differ and we
-    # have real vessel data for it; otherwise fall back to whichever single step is known.
+    # in one container. Name both when they differ and we have real vessel data for it;
+    # otherwise fall back to whichever single step is known.
     if added_step and vessel_entry_step and vessel_entry_step != added_step:
         where = f"entered the {vessel}" if vessel else "entered this vessel"
         clauses.append(f"added in step {added_step}")
@@ -345,13 +344,12 @@ def _origin_phrase(
 
 def _lead_in(finding: ChemicalPairFinding, step_numbers: list[int]) -> str:
     """The authored, deterministic framing line — never concatenated with the CAMEO
-    quote (see app/interaction_matrix.py's 2026-07-10 audit note). "Combined" only for
-    the step both chemicals were freshly added; if the pair then stays co-present
-    across later steps, say so explicitly rather than implying the hazard was a single
-    instant (2026-07-10 item-2 follow-up). Otherwise names each chemical's origin,
-    since a carryover meeting is a materially different claim from a same-step mix
-    (§3.3's trust-critical seam) and deserves to be said in the card, not just shown in
-    the thread graphic."""
+    quote (see app/interaction_matrix.py). "Combined" only for the step both chemicals
+    were freshly added; if the pair then stays co-present across later steps, say so
+    explicitly rather than implying the hazard was a single instant. Otherwise names
+    each chemical's origin, since a carryover meeting is a materially different claim
+    from a same-step mix and deserves to be said in the card, not just shown in the
+    thread graphic."""
     if finding.origin_a == "added" and finding.origin_b == "added":
         a_name = _named(finding.chemical_a_name, finding.concentration_a)
         b_name = _named(finding.chemical_b_name, finding.concentration_b)
@@ -375,8 +373,8 @@ def _lead_in(finding: ChemicalPairFinding, step_numbers: list[int]) -> str:
 def _render_quote(verdict: InteractionVerdict, protocol_chemical_names: set[str]) -> str:
     """The chipped hazard-card body: always the group-level `categories`, plus CAMEO's
     documented `example` ONLY when every chemical it names is actually present in this
-    protocol (2026-07-10 item-1 follow-up). A real, correctly-cited CAMEO example can
-    still mislead if it happens to document a *different* member of the same reactive
+    protocol. A real, correctly-cited CAMEO example can still mislead if it happens to
+    document a *different* member of the same reactive
     group than the one in front of the reader — e.g. a metal-chlorate example under a
     hydrogen-peroxide finding. Deterministic, no model call."""
     if verdict.example and verdict.example_chemicals and all(
@@ -460,7 +458,7 @@ def _step_context_statement(step: Step, all_chemical_ids: list[str]) -> BriefSta
 
 
 def _unresolved_mention_statement(mention: str) -> BriefStatement:
-    """§16.2/§D: a chemical-looking phrase Stage 1 couldn't confidently resolve.
+    """A chemical-looking phrase Stage 1 couldn't confidently resolve.
     Never silently dropped — same honest-omission rule as a missing grounding
     heading, just at the extraction layer instead of PubChem's."""
     return BriefStatement(
@@ -578,16 +576,13 @@ def build_brief(
             continue
         statements.append(_omission_flag_statement(flag, chemical_by_id, profiles))
 
-    # UI_Design_Spec.md §6.6: "attached to the PPE section"; §15 item 4: "attached to
-    # PPE where it bites." This qualifies REAL PPE content that was actually rendered —
-    # it does not exist to announce the concept of a PPE gap in the abstract. Only add it
-    # when at least one chemical actually has a PPE statement (pre-freeze fix, 2026-07-11:
-    # when nothing in the whole brief has PPE data — e.g. DAPI, confirmed live: found=True
-    # but every section is in missing_sections — the disclosure's own copy says "the PPE
-    # guidance ABOVE is what PubChem publishes," which is false when nothing is above it,
-    # implying guidance was given and then withheld. Each chemical's own no_data gap card
-    # already says PPE data is missing, so the honest-omission rule stays satisfied without
-    # this card also appearing as an orphan with nothing to attach to.)
+    # The glove disclosure attaches to REAL PPE content that was actually rendered — it
+    # does not exist to announce a PPE gap in the abstract. Only add it when at least one
+    # chemical actually has a PPE statement: when nothing in the brief has PPE data, the
+    # disclosure's own copy ("the PPE guidance ABOVE is what PubChem publishes") would be
+    # false, implying guidance was given and then withheld. Each chemical's own no_data
+    # gap card already reports missing PPE, so the honest-omission rule holds without this
+    # card appearing as an orphan with nothing to attach to.
     if any(s.kind == "ppe" for s in statements):
         statements.append(
             BriefStatement(

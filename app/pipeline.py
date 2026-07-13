@@ -69,8 +69,8 @@ def run_pipeline(protocol_text: str, enable_omissions: bool = True) -> PipelineR
     here. A grounding failure on some chemicals therefore still produces a
     Brief — just one with Brief.incomplete=True.
 
-    `enable_omissions` is the per-protocol suppression switch (Build_Spec.md's
-    omission-detection phase, rule 2d) — default on. Omission-detection is a
+    `enable_omissions` is the per-protocol suppression switch — default on.
+    Omission-detection is a
     separate Claude reasoning step (like extraction) with its own failure mode;
     a failure there degrades to zero flags rather than taking down the whole
     brief, since it's a strictly additive layer, never load-bearing for the
@@ -105,7 +105,7 @@ async def stream_pipeline_events(
 ) -> AsyncIterator[StreamMessage]:
     """Run the full pipeline, yielding a StreamMessage as each real event happens.
 
-    Honesty rule (UI_Design_Spec.md §14.2): a message is yielded only after its
+    Honesty rule: a message is yielded only after its
     underlying work has actually completed — never before, never synthesized.
     The two genuinely blocking calls (extract: one Anthropic call; ground_chemical:
     several httpx calls + a rate-limit sleep) run via asyncio.to_thread so they
@@ -119,7 +119,7 @@ async def stream_pipeline_events(
 
     `result` fires whenever a Brief was produced, including an incomplete one —
     suppressing it on a grounding failure would hide the exact "Incomplete brief"
-    state (UI_Design_Spec.md §16.1) the product is designed to surface. A per-
+    state the product is designed to surface. A per-
     chemical grounding failure yields both a `chemical` event and a `recoverable`
     `error` event, then the loop continues.
     """
@@ -201,8 +201,8 @@ async def stream_pipeline_events(
     # slow like extraction, so it earns its own started/done pair rather than
     # appearing to happen for free between "interactions" and "brief". A failure here
     # degrades to zero flags — never takes down the brief, since this layer is
-    # strictly additive (Build_Spec.md's omission-detection phase, rule 2d covers the
-    # explicit per-protocol suppression switch; this covers the unplanned-failure case).
+    # strictly additive (the enable_omissions switch covers deliberate per-protocol
+    # suppression; this covers the unplanned-failure case).
     omissions = OmissionDetectionResult(flags=[])
     if enable_omissions:
         yield StreamMessage(event="stage", data={"stage": "omissions", "status": "started"})

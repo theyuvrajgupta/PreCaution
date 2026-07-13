@@ -1,7 +1,7 @@
-"""Phase 2: the second grounding source — a small, hand-verified, offline fallback table
+"""The second grounding source — a small, hand-verified, offline fallback table
 for hazard data on biologicals PubChem's small-molecule database genuinely has no record
 for, consulted ONLY when live PubChem grounding (app.pubchem.resolve_cid, including its
-Phase 1a normalization/alias fallbacks) has already failed.
+normalization/alias fallbacks) has already failed.
 
 Architecture rule, same reasoning as app/interaction_matrix.py's separation from
 app/pubchem.py: PubChem stays the PRIMARY, live, unchanged source. This table is a
@@ -11,7 +11,7 @@ or authoritative reference at the time it's added, never from model recall. A wr
 invented entry here would be worse than an honest miss, so this stays small; extend
 deliberately, same fetch-and-verify process each time.
 
-Seed entry: trypsin. Verified 2026-07-13 against Southern Biological's SDS (product
+Seed entry: trypsin. Verified against Southern Biological's SDS (product
 MC23.1M, issued 2020-03-12) — https://www.southernbiological.com/content/MSDS/MC23.1M_%20Trypsin%20SDS%202020.pdf
 CAS 9002-07-7, GHS signal word "Danger", hazard classification: Respiratory Sensitisation
 Category 1, Skin Irritation Category 2, Eye Irritation Category 2A, Specific Target Organ

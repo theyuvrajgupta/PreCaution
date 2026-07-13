@@ -3,7 +3,7 @@
 PubChem's chemical/safety data is static enough for hackathon-week purposes —
 it won't meaningfully change between building and recording the demo — so an
 indefinite on-disk cache does two things: speeds up repeated dev runs, and
-means demo recording on Day 4 isn't hostage to live network conditions. Only
+means recording the demo isn't hostage to live network conditions. Only
 successful, well-formed responses are cached; 404s and PUG-View "Fault"
 bodies are re-checked live each time (cheap, and the honest-omission logic
 should always reflect current reality for those).

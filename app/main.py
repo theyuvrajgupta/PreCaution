@@ -30,10 +30,9 @@ class ExtractRequest(BaseModel):
 
 class BriefRequest(BaseModel):
     protocol_text: str
-    # Per-protocol suppression switch for omission-detection (Build_Spec.md's
-    # omission-detection phase, rule 2d) — default on. Lets a specific run be
-    # recorded without the layer if a flag ever lands somewhere distracting,
-    # with no code change or redeploy needed on demo day.
+    # Per-protocol suppression switch for omission-detection — default on. Lets a
+    # specific run be recorded without the layer if a flag ever lands somewhere
+    # distracting, with no code change or redeploy needed.
     enable_omissions: bool = True
 
 

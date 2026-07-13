@@ -88,9 +88,9 @@ class ExtractionResult(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# PubChem grounding (task #5). A ChemicalHazardProfile is what per-chemical
-# grounding produces for one Chemical.canonical_name; interaction reasoning
-# (#6) and honest-omission reporting (#7) both consume it.
+# PubChem grounding. A ChemicalHazardProfile is what per-chemical grounding
+# produces for one Chemical.canonical_name; interaction reasoning and
+# honest-omission reporting both consume it.
 # ---------------------------------------------------------------------------
 
 
@@ -120,7 +120,7 @@ class SafetyExcerpt(BaseModel):
     cites more than one authority under a single heading; kept separate (not
     flattened into one joined string) so the UI can group and label them by
     audience — NIOSH is occupational guidance, ERG is written for hazmat
-    first responders at a transport incident (UI_Design_Spec.md §20)."""
+    first responders at a transport incident."""
 
     source_label: str = Field(
         description="The citation as PubChem states it, e.g. 'NIOSH Pocket Guide for Sulfuric acid' or "
@@ -129,7 +129,7 @@ class SafetyExcerpt(BaseModel):
         "no such marker is present."
     )
     audience: Literal["niosh", "erg", "other"] = Field(
-        description="Coarse bucket derived deterministically from source_label, driving §20's grouped "
+        description="Coarse bucket derived deterministically from source_label, driving the grouped "
         "rendering: NIOSH open by default, ERG collapsed and labelled, other shown as-is."
     )
     text: str
@@ -145,7 +145,7 @@ class SafetyNote(BaseModel):
 
 
 class FallbackHazardEntry(BaseModel):
-    """Phase 2: one entry in the hand-verified, offline fallback hazard table
+    """One entry in the hand-verified, offline fallback hazard table
     (app/fallback_hazards.py) — hazard data for a biological reagent PubChem's
     small-molecule database has no record for, sourced from a real supplier SDS,
     never invented. See that module's docstring for the verification rule."""
@@ -187,7 +187,7 @@ class ChemicalHazardProfile(BaseModel):
     )
     fallback_source: FallbackHazardEntry | None = Field(
         default=None,
-        description="Phase 2: set only when found=False AND app.fallback_hazards has a hand-verified entry "
+        description="Set only when found=False AND app.fallback_hazards has a hand-verified entry "
         "for this name — PubChem genuinely has no record, but a real supplier SDS does. found stays False "
         "(that is still an accurate fact about PubChem specifically); this field carries the alternate, "
         "separately-cited hazard data. Never set when a live PubChem result exists — PubChem is always tried "
@@ -196,11 +196,11 @@ class ChemicalHazardProfile(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Stage 4: the control layer / brief rendering (see private/Build_Spec.md §4).
-# A Brief is pure composition over ChemicalHazardProfile + ChemicalPairFinding
-# — no new grounding, no model call. Every BriefStatement must carry a
-# resolvable source_ref; that's the whole trust contract for this stage,
-# enforced as a test (tests/test_brief.py), not just an assertion.
+# The brief / control layer. A Brief is pure composition over
+# ChemicalHazardProfile + ChemicalPairFinding — no new grounding, no model
+# call. Every BriefStatement must carry a resolvable source_ref; that's the
+# whole trust contract for this stage, enforced as a test (tests/test_brief.py),
+# not just an assertion.
 # ---------------------------------------------------------------------------
 
 BriefKind = Literal[
@@ -236,7 +236,7 @@ class BriefStatement(BaseModel):
         description="Set only for 'interaction_hazard': the authored, deterministic framing line — which "
         "chemicals, and (per app/interactions.py's origin data) whether they were combined directly or one "
         "arrived by carryover. Renders ABOVE the quote, with no chip — never concatenated into `text`, so the "
-        "chipped block can never contain authored prose (see app/interaction_matrix.py's 2026-07-10 audit).",
+        "chipped block can never contain authored prose (see app/interaction_matrix.py).",
     )
     hazard_note: str | None = Field(
         default=None,
@@ -247,7 +247,7 @@ class BriefStatement(BaseModel):
     unverified: bool = Field(
         default=False,
         description="True only for 'step_context': this came from extraction (Claude reading the protocol), "
-        "not from an independent grounding source. See Build_Spec.md §3.3.",
+        "not from an independent grounding source.",
     )
     step_numbers: list[int] = Field(
         default_factory=list,
@@ -265,7 +265,7 @@ class BriefStatement(BaseModel):
     audience: Literal["niosh", "erg", "other"] | None = Field(
         default=None,
         description="Set only for per-chemical safety-note kinds (ppe/first_aid/disposal/storage): which "
-        "authority this excerpt is from and who it's written for (see SafetyExcerpt). Drives §20's grouped "
+        "authority this excerpt is from and who it's written for (see SafetyExcerpt). Drives the grouped "
         "rendering — NIOSH open by default, ERG collapsed and labelled.",
     )
     source_label: str | None = Field(
@@ -278,12 +278,12 @@ class BriefStatement(BaseModel):
         default=None,
         description="Set only for 'hazard_identity': GHSInfo.signal_word ('Danger' or 'Warning'), carried as a "
         "structured field (not just embedded in text) so the UI can colour the per-chemical row and badge it "
-        "without re-parsing prose (UI_Design_Spec.md §4.6/§20.2).",
+        "without re-parsing prose.",
     )
     pictogram_urls: list[str] = Field(
         default_factory=list,
         description="Set only for 'hazard_identity': GHSInfo.pictogram_urls — real GHS SVGs from PubChem, "
-        "parallel to pictogram_labels. §6.3/§G: rendered as-is, 28px, never recoloured.",
+        "parallel to pictogram_labels. Rendered as-is, 28px, never recoloured.",
     )
     pictogram_labels: list[str] = Field(
         default_factory=list,
@@ -295,16 +295,15 @@ class BriefStatement(BaseModel):
         description="Set only for 'interaction_no_data': mirrors ChemicalPairFinding.status, so the UI can "
         "group 'we checked this pair against our reference set and nothing matched' separately from 'we "
         "could not even determine one or both chemicals' reactive groups to check' — two different epistemic "
-        "states that must never render identically (2026-07-11 pre-submission correctness check). Both "
-        "already produce differently-worded `text`; this exposes WHY as a structured field instead of "
-        "leaving the renderer to sniff the prose.",
+        "states that must never render identically. Both already produce differently-worded `text`; this "
+        "exposes WHY as a structured field instead of leaving the renderer to sniff the prose.",
     )
 
 
 class BriefStep(BaseModel):
     number: int
     text: str
-    vessel: str | None = Field(default=None, description="From Step.vessel — drives the carryover thread's vessel-change tick (UI_Design_Spec.md §6.1).")
+    vessel: str | None = Field(default=None, description="From Step.vessel — drives the carryover thread's vessel-change tick.")
     chemicals: list[StepChemicalRef] = Field(
         default_factory=list,
         description="Every chemical present this step, with origin (added/carried_over/residual) — this is "

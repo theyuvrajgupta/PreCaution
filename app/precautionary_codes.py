@@ -5,7 +5,7 @@ each code PubChem returns for the demo protocol's three chemicals to its
 official UN GHS wording, so the brief can say what the code actually means.
 
 Deterministic, no model call — same rule as app/interaction_matrix.py.
-Sourced (not recalled) 2026-07-10, cross-referenced against two independent
+Sourced (not recalled), cross-referenced against two independent
 secondary references that both cite the UN GHS "Purple Book" (Annex 3) and
 ECHA/CLP Regulation 1272/2008 (the same authority PubChem's own GHS
 classifications already cite in this project — see app/pubchem.py):
@@ -16,8 +16,8 @@ drift on P271/P420 across GHS revisions; the more commonly-cited revision's
 wording was kept in those cases.
 
 Deliberately scoped to only the codes the demo's three chemicals actually
-emit (confirmed live against PubChem 2026-07-10) — same "small seed set,
-extend deliberately" pattern as the interaction matrix. Extending this table
+emit — same "small seed set, extend deliberately" pattern as the interaction
+matrix. Extending this table
 for a new chemical must go through the same fetch-and-cross-reference
 process, never general GHS recall.
 

@@ -4,10 +4,9 @@ extraction.
 Why this stage exists: extraction reliably finds chemicals and hazards the
 moment a protocol has step structure, but a protocol pasted as one unbroken
 paragraph of prose was landing in the empty state — chemicals never got
-extracted at all. The single variable was line/step structure (see
-Build_Spec: Prose Segmentation, Run A vs Run B). This stage restores that
-structure ahead of extraction so the highest-value input (a free-text methods
-section or bench note) works like a numbered one.
+extracted at all. The single variable was line/step structure. This stage
+restores that structure ahead of extraction so the highest-value input (a
+free-text methods section or bench note) works like a numbered one.
 
 Deliberate boundaries, matching the project's stage-separation rule:
 - This is a SEPARATE Claude pass with its own prompt, never folded into the

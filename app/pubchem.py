@@ -1,6 +1,6 @@
 """PubChem grounding: canonical chemical name -> ChemicalHazardProfile.
 
-Two live PubChem APIs, both public/no-auth (confirmed working 2026-07-09):
+Two live PubChem APIs, both public/no-auth:
   - PUG-REST: name -> CID.
   - PUG-View: CID + heading -> structured/free-text safety content, always
     carrying its own source citation.
@@ -146,15 +146,13 @@ def _normalize_for_lookup(name: str) -> str:
 # mapping that grounds the wrong compound is worse than an honest miss, so this stays
 # small and conservative; extend deliberately, same verification each time.
 #
-# paraformaldehyde -> 712 (formaldehyde). Verified live 2026-07-13: PUG-REST
-# /compound/name/paraformaldehyde/ returns PUGREST.NotFound, but PubChem's OWN synonym
-# list for CID 712 already includes "Para-formaldehyde" (hyphenated) and "Paraformaldehyde
-# (JP17)" — both confirmed resolving to CID 712 via direct query. The bare unhyphenated
-# "paraformaldehyde" is simply not an exact-string match PUG-REST's endpoint catches,
-# not a case where PubChem lacks the substance. CID 712 carries real GHS data (confirmed
-# live: GHS Classification heading present, not a Fault). Paraformaldehyde (solid,
-# (CH2O)n) is the polymer that releases formaldehyde monomer in solution — exactly why 4%
-# paraformaldehyde fixative solutions are handled as a formaldehyde hazard in practice.
+# paraformaldehyde -> 712 (formaldehyde). PUG-REST /compound/name/paraformaldehyde/ returns
+# NotFound, but CID 712's own synonym list already includes "Para-formaldehyde" and
+# "Paraformaldehyde (JP17)" (both verified resolving to 712) — the bare unhyphenated spelling
+# is just not an exact-string match PUG-REST catches, not a case where PubChem lacks the
+# substance. CID 712 carries real GHS data. Paraformaldehyde (solid, (CH2O)n) releases
+# formaldehyde monomer in solution, which is why 4% PFA fixative is handled as a formaldehyde
+# hazard in practice.
 _KNOWN_ALIASES: dict[str, int] = {
     "paraformaldehyde": 712,
 }
@@ -213,8 +211,8 @@ def _references_by_number(record: dict) -> dict[int, dict]:
 
 def _fix_mojibake(text: str) -> str:
     """Some PubChem-sourced text (ERG/NIOSH excerpts) is double-encoded at the source:
-    confirmed live (2026-07-10) that PubChem's own HTTP response bytes for a bullet
-    character are C3 A2 C2 80 C2 A2 — the UTF-8 encoding of "•" (E2 80 A2) with each of
+    PubChem's own HTTP response bytes for a bullet character are C3 A2 C2 80 C2 A2 —
+    the UTF-8 encoding of "•" (E2 80 A2) with each of
     those three bytes *individually* re-encoded as UTF-8 a second time, as if an
     upstream system had decoded UTF-8 bytes as Latin-1 and then UTF-8-encoded the
     result. Correctly decoding our own response (this module already does) faithfully
@@ -349,8 +347,8 @@ def get_reactive_groups(cid: int) -> list[ReactiveGroupEntry]:
 
 # PubChem prefixes a self-identifying citation onto some excerpts, e.g.
 # "Excerpt from NIOSH Pocket Guide for Sulfuric acid:" or "Excerpt from ERG
-# Guide 140 [Oxidizers]:" — confirmed live 2026-07-10 as a standalone string
-# that always precedes the excerpt's own body text. This is the only place
+# Guide 140 [Oxidizers]:" — a standalone string that always precedes the
+# excerpt's own body text. This is the only place
 # the true original authority (NIOSH / ERG) is stated; the Reference block's
 # own SourceName is often just the aggregator (e.g. "CAMEO Chemicals", which
 # rehosts both NIOSH and ERG content under its own ReferenceNumber).
@@ -444,13 +442,11 @@ def get_safety_note(cid: int, heading: str) -> SafetyNote | None:
 
     # Cross-citation dedup: the per-(label, line) `seen` set above only catches a
     # repeat WITHIN one citation. PubChem also cites the exact same excerpt under two
-    # entirely different labels — confirmed live: hydrogen peroxide's PPE heading
-    # repeats its ERG guidance byte-for-byte under both "ERG Guide 140 [Oxidizers]"
-    # and "ERG Guide 143 [Oxidizers (Unstable)]", two different CAMEO URLs (890 vs
-    # 19279). Same fix as §19.2's original excerpt dedup, extended to catch this case
-    # too: dedupe on exact normalised (whitespace-collapsed) text, keeping the first
-    # occurrence — group_order's order, so deterministic — dropping any later citation
-    # whose combined text is identical to one already kept.
+    # entirely different labels — e.g. hydrogen peroxide's PPE heading repeats its ERG
+    # guidance byte-for-byte under both "ERG Guide 140 [Oxidizers]" and "ERG Guide 143
+    # [Oxidizers (Unstable)]" (two different CAMEO URLs). Dedupe on exact normalised
+    # (whitespace-collapsed) text, keeping the first occurrence — group_order's order,
+    # so deterministic — dropping any later citation whose text is identical.
     deduped: list[SafetyExcerpt] = []
     seen_text: set[str] = set()
     for excerpt in excerpts:
@@ -503,14 +499,14 @@ def ground_chemical(canonical_name: str) -> ChemicalHazardProfile:
     try:
         cid = resolve_cid(canonical_name)
         if cid is None:
-            # Phase 2: PubChem (just exhausted above, including the Phase 1a normalization/
-            # alias fallbacks) is always tried first and always wins when it has a record —
-            # this fallback table is only ever consulted after a genuine PubChem miss. Real,
-            # sourced hazard data takes priority over the generic "protein, no small-molecule
-            # record" framing when both could apply (checked first, not merely first-listed).
-            # Same normalization fallback as resolve_cid (extraction occasionally leaves a
-            # stray concentration descriptor in canonical_name) — tries the raw name first,
-            # the normalized form second, still exact-match only, never fuzzy.
+            # PubChem (just exhausted above, including the normalization/alias fallbacks) is
+            # always tried first and always wins when it has a record — this fallback table is
+            # only ever consulted after a genuine PubChem miss. Real, sourced hazard data takes
+            # priority over the generic "protein, no small-molecule record" framing when both
+            # could apply (checked first, not merely first-listed). Same normalization fallback
+            # as resolve_cid (extraction occasionally leaves a stray concentration descriptor in
+            # canonical_name) — tries the raw name first, the normalized form second, still
+            # exact-match only, never fuzzy.
             fallback = fallback_hazards.lookup(canonical_name) or fallback_hazards.lookup(
                 _normalize_for_lookup(canonical_name)
             )

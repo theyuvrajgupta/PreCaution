@@ -31,6 +31,7 @@ from app.models import (
     ReactiveGroupEntry,
 )
 
+
 class ChemicalPairFinding(BaseModel):
     step_number: int
     chemical_a_id: str
@@ -44,8 +45,7 @@ class ChemicalPairFinding(BaseModel):
         description="EARLIEST step <= step_number where chemical_a's origin was 'added' — its true point of "
         "introduction into the protocol. Equals step_number when origin_a=='added' at this step. Deliberately "
         "the first such tag, not the most recent: a later step re-tagging the chemical 'added' when it's "
-        "poured into a new vessel is a vessel transition (see vessel_entry_step_a), not a second origin "
-        "(2026-07-10 follow-up to the item-1/item-2 audit).",
+        "poured into a new vessel is a vessel transition (see vessel_entry_step_a), not a second origin.",
     )
     added_step_b: int | None = Field(default=None, description="Same as added_step_a, for chemical_b.")
     vessel: str | None = Field(default=None, description="Step.vessel at step_number — the vessel this pair is "
@@ -111,10 +111,9 @@ def _no_data_note(name_a: str, entries_a: list[ReactiveGroupEntry], name_b: str,
 
     Deliberately generic even when one member's own reactive group is CAMEO's "Not
     Chemically Reactive" assignment — that's a property of the CHEMICAL, stated once
-    per chemical elsewhere (app/brief.py's NOT_REACTIVE_GROUP statement), not repeated
-    here for every pair that chemical happens to co-occur with (pre-freeze fix,
-    2026-07-11: this used to special-case that classification into the pair-level note,
-    which meant a chemical present in N pairs repeated the identical sentence N times).
+    per chemical elsewhere (app/brief.py's NOT_REACTIVE_GROUP statement), never repeated
+    here for every pair it happens to co-occur with (which would print the identical
+    sentence once per pair).
     """
     groups_a_names = [e.group_name for e in entries_a]
     groups_b_names = [e.group_name for e in entries_b]

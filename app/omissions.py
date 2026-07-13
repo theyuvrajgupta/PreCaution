@@ -1,6 +1,6 @@
-"""Omission-detection: the third pillar (Build_Spec.md's framing) alongside
-comprehension (extraction) and accumulation (carryover tracking) — noticing
-what a protocol failed to specify that matters for safety.
+"""Omission-detection: a third reading pass alongside comprehension (extraction)
+and accumulation (carryover tracking) — noticing what a protocol failed to
+specify that matters for safety.
 
 Architecture rule: this is a SEPARATE Claude reasoning step on the "Claude
 reads" side of the trust line, same category as extraction, never touching
