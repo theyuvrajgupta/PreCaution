@@ -178,13 +178,12 @@ def test_unrelated_known_groups_report_no_established_data_not_safe():
 
 
 def test_not_chemically_reactive_pair_uses_generic_note_not_per_pair_classification():
-    # Pre-freeze fix, 2026-07-11: a chemical's CAMEO "Not Chemically Reactive" assignment
-    # (nitrogen's, confirmed live 2026-07-10) is a property of that CHEMICAL, not of each
-    # pair it happens to co-occur with. It used to be folded into this pair-level note,
-    # which meant a chemical present in N pairs repeated the identical classification
-    # sentence N times (§21's "free grounding win" over-applied). Stated once instead, as
-    # its own per-chemical statement (see tests/test_brief.py) — this pair-level note
-    # stays fully generic, with no markdown and no per-pair classification wording.
+    # A chemical's CAMEO "Not Chemically Reactive" assignment (e.g. nitrogen's) is a
+    # property of that CHEMICAL, not of each pair it happens to co-occur with. Folding it
+    # into this pair-level note would make a chemical present in N pairs repeat the
+    # identical classification sentence N times. It's stated once instead, as its own
+    # per-chemical statement (see tests/test_brief.py) — this pair-level note stays fully
+    # generic, with no markdown and no per-pair classification wording.
     result = ExtractionResult(
         chemicals=[
             Chemical(id="c1", as_written="water", canonical_name="water", resolution_reasoning="Direct match."),

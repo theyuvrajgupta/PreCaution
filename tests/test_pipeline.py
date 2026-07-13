@@ -108,8 +108,8 @@ def test_run_pipeline_live_demo_protocol():
 def test_run_pipeline_prose_paragraph_now_extracts():
     """Run A, the permanent regression for the prose bug: bleach + acid written as
     ONE unbroken prose paragraph must now extract, not land in the empty state
-    (Build_Spec: Prose Segmentation, gate #3). Before segmentation this produced
-    zero chemicals."""
+    (the prose-segmentation gate). Before segmentation this produced zero
+    chemicals."""
     result = pipeline.run_pipeline(_RUN_A_PROSE)
 
     assert result.extraction.chemicals, "prose paragraph must extract chemicals, not empty out"

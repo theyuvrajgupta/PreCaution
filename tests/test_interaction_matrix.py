@@ -6,7 +6,7 @@ def test_piranha_pair_found_and_sourced():
     assert verdict is not None
     assert "explosion" in verdict.hazard_types
     # The pairwise reactivity-documentation page, not the generic single-group datasheet —
-    # the generic page doesn't carry pair-specific predictions at all (2026-07-10 audit).
+    # the generic page doesn't carry pair-specific predictions at all.
     assert verdict.source.url == "https://cameochemicals.noaa.gov/reactivity/documentation/RG44-RG2"
 
 
@@ -26,8 +26,8 @@ def test_azide_acid_pair_found_and_sourced():
 
 def test_sodium_hypochlorite_sulfuric_acid_pair_found_and_sourced():
     """Sodium hypochlorite is classified 'Salts, Basic' AND 'Oxidizing Agents, Strong' by
-    CAMEO (confirmed live via PubChem's Reactive Group heading, 2026-07-11) — the latter
-    already collides with the piranha-solution pair above, so this entry deliberately uses
+    CAMEO (via PubChem's Reactive Group heading) — the latter already collides with the
+    piranha-solution pair above, so this entry deliberately uses
     the Salts, Basic pairing instead, which is real, distinct, and fires for sulfuric acid
     + sodium hypochlorite without touching that existing entry."""
     verdict = lookup_verdict("Salts, Basic", "Acids, Strong Oxidizing")
@@ -49,8 +49,8 @@ def test_unknown_pair_returns_none_not_a_safety_claim():
 
 
 def test_quote_never_contains_authored_prose():
-    """The item-1 audit fix, locked in: every verdict's categories/example text must be
-    free of strings that were authored by us rather than fetched from CAMEO. We can't
+    """Every verdict's categories/example text must be free of strings that were authored
+    by us rather than fetched from CAMEO. We can't
     re-fetch CAMEO in a test, so this checks the specific failure mode instead — neither
     field may contain the `note` text (the mechanism that let authored prose leak under
     the chip last time), and neither may name a specific commercial/informal mixture
@@ -70,8 +70,8 @@ def test_quote_never_contains_authored_prose():
 
 
 def test_example_never_ships_without_its_required_chemicals():
-    """2026-07-10 follow-up to the item-1 audit: a documented example is only meaningful
-    evidence for THIS pair if it names specific chemicals, and app/brief.py only renders
+    """A documented example is only meaningful evidence for THIS pair if it names specific
+    chemicals, and app/brief.py only renders
     it when every one of those chemicals is present in the protocol being briefed. That
     check is only possible if example_chemicals is populated whenever example is —
     guard the data itself, not just the composition-time logic that reads it.
@@ -86,8 +86,8 @@ def test_example_never_ships_without_its_required_chemicals():
 
 
 def test_rg44_rg2_has_no_example_since_its_only_documented_instance_is_not_hydrogen_peroxide():
-    """The actual bug this whole follow-up exists to fix: RG44-RG2 (the pair hydrogen
-    peroxide + sulfuric acid resolve to) has a real, verbatim, correctly-cited CAMEO
+    """RG44-RG2 (the pair hydrogen peroxide + sulfuric acid resolve to) has a real,
+    verbatim, correctly-cited CAMEO
     example — but it's about metal chlorates, a different oxidizer in the same group,
     not hydrogen peroxide. Shipping it under this pair's chip would be misleading even
     though every word is genuinely quoted. Locks in that this entry has no `example` at
@@ -101,7 +101,7 @@ def test_rg44_rg2_has_no_example_since_its_only_documented_instance_is_not_hydro
 
 
 def test_note_is_never_a_hazard_claim():
-    """§ item 1: 'note may never contain a safety claim. Nominal facts only.' A cheap,
+    """The rule 'a note may never contain a safety claim; nominal facts only.' A cheap,
     real guard: none of the hazard-signalling verbs/nouns this table's quotes use should
     appear in a note — a note that starts describing danger has drifted into being an
     unsourced hazard claim, which is exactly the bug this restructuring exists to prevent.

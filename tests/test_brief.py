@@ -121,8 +121,8 @@ def _fully_grounded_demo_profiles() -> dict[str, ChemicalHazardProfile]:
 
 
 def test_every_brief_statement_has_resolvable_source_ref():
-    """The mandatory test from Build_Spec.md §4.3: 'this is grounded' must be a
-    passing test, not just an assertion in the README."""
+    """The mandatory 'this is grounded' test: it must be a passing test, not
+    just an assertion in the README."""
     result = _demo_extraction_result()
     profiles = _fully_grounded_demo_profiles()
     findings = find_step_interactions(result, profiles)
@@ -180,7 +180,7 @@ def test_precautionary_statement_resolves_known_p_codes():
     assert precautionary
     text = precautionary[0].text
     # Known codes resolve to their official GHS text, not a bare code. The code:text
-    # join is a colon, not an em dash (Pass B7: no em dashes in preCaution's own copy).
+    # join is a colon, not an em dash (no em dashes in preCaution's own copy).
     assert "P260: Do not breathe dust/fume/gas/mist/vapours/spray." in text
     assert "P280: Wear protective gloves" in text
     # An unresolved code (not in our small demo-scoped table) falls back to the
@@ -205,15 +205,13 @@ def test_glove_disclosure_is_present_and_own_statement():
 
 
 def test_glove_disclosure_omitted_when_no_chemical_has_ppe_data():
-    """Pre-freeze fix, 2026-07-11: the disclosure text says 'The PPE guidance ABOVE is
-    what PubChem publishes' — UI_Design_Spec.md §6.6 says render it 'attached to the PPE
-    section', §15 item 4 says 'attached to PPE where it bites'. When not one chemical in
-    the whole brief has any PPE data (e.g. DAPI, confirmed live: found=True but every
-    section including PPE is in missing_sections), there is no PPE guidance above for it
-    to qualify — showing it anyway would imply guidance was given and then withheld. The
-    absence is already honestly surfaced by each chemical's own 'no_data' gap card
-    ('no GHS classification, PPE, first aid...'); this disclosure must not also appear
-    as an orphaned card with nothing to attach to."""
+    """The disclosure text says 'The PPE guidance ABOVE is what PubChem publishes' and
+    must render attached to real PPE content. When not one chemical in the whole brief has
+    any PPE data (e.g. DAPI: found=True but every section including PPE is in
+    missing_sections), there is no PPE guidance above for it to qualify — showing it anyway
+    would imply guidance was given and then withheld. The absence is already honestly
+    surfaced by each chemical's own 'no_data' gap card; this disclosure must not also
+    appear as an orphaned card with nothing to attach to."""
     result = ExtractionResult(
         chemicals=[
             Chemical(id="c1", as_written="DAPI", canonical_name="DAPI", resolution_reasoning="x"),
@@ -328,10 +326,10 @@ def test_missing_heading_emits_no_data():
 
 
 def test_missing_sections_aggregate_into_one_card_per_chemical():
-    """Item 3: a chemical missing all five headings used to emit five near-identical
-    "no data" cards (water/nitrogen/PBS each did) — that's the gap flood recreated one
-    level down from the pair-gap aggregation. One card per chemical now, listing which
-    sections are absent, still surfacing the gap honestly.
+    """A chemical missing all five headings would otherwise emit five near-identical
+    "no data" cards — that's the gap flood recreated one level down from the pair-gap
+    aggregation. One card per chemical, listing which sections are absent, still
+    surfacing the gap honestly.
     """
     result = _demo_extraction_result()
     profiles = _fully_grounded_demo_profiles()
@@ -373,14 +371,14 @@ def test_piranha_interaction_hazard_statement_present():
     assert hazard[0].step_numbers == [1]  # this scaffold only has c1+c2 co-present in step 1
     assert "cameochemicals.noaa.gov" in (hazard[0].source_url or "")
     # short, chip-ready — not a citation sentence; the pairwise reactivity-documentation
-    # page, not the generic single-group datasheet (2026-07-10 audit)
+    # page, not the generic single-group datasheet
     assert hazard[0].source_ref == "NOAA CAMEO documentation/RG44-RG2"
     assert "Step 1:" not in hazard[0].text  # step number lives in step_numbers, not baked into prose
 
 
 def test_interaction_lead_in_shows_concentration_when_known():
-    """2026-07-10: Chemical.concentration is extracted but was never read by any later
-    stage — the interaction lead-in is exactly where a reader needs it (a 0.02% trace
+    """Chemical.concentration is extracted but is not read by any later stage — the
+    interaction lead-in is exactly where a reader needs it (a 0.02% trace
     reads very differently from a bulk reagent). Shown, never used to change the
     verdict itself: the hazard is flagged the same regardless of concentration."""
     result = _demo_extraction_result()
@@ -429,8 +427,8 @@ def test_hazard_identity_shows_concentration_when_known():
 
 
 def test_interaction_hazard_chip_text_is_exactly_the_quote():
-    """The item-1 audit fix, locked in as a test: the chipped block (BriefStatement.text)
-    must be composed ENTIRELY from InteractionVerdict.categories (plus .example, only
+    """The chipped block (BriefStatement.text) must be composed ENTIRELY from
+    InteractionVerdict.categories (plus .example, only
     when every example_chemicals name is present in the protocol) — never concatenated
     with authored prose like "Combining X and Y" or a note. That authored framing lives
     in `lead_in` / `hazard_note` instead, both rendered separately with no chip. This is
@@ -464,8 +462,8 @@ def test_interaction_hazard_chip_text_is_exactly_the_quote():
 
 
 def test_interaction_example_never_ships_for_a_chemical_it_doesnt_name():
-    """2026-07-10 follow-up to the item-1 audit: a documented example must never render
-    under a pair's chip unless every chemical it names is actually in the protocol.
+    """A documented example must never render under a pair's chip unless every
+    chemical it names is actually in the protocol.
     Regression-tests the exact failure mode reported: RG44-RG2's only documented
     example names metal chlorates, not hydrogen peroxide — the pair this demo protocol
     actually resolves to.
@@ -505,8 +503,8 @@ def test_interaction_no_data_is_surfaced():
 
 
 def test_gap_status_distinguishes_checked_from_uncheckable():
-    """2026-07-11 pre-submission correctness check: 'we checked this pair against our
-    reference set and nothing matched' and 'we could not even determine a reactive
+    """'we checked this pair against our reference set and nothing matched' and 'we
+    could not even determine a reactive
     group to check' are different epistemic states — the tool's whole thesis is making
     exactly this kind of distinction, so BriefStatement.gap_status must carry it
     structurally, not leave the UI to sniff which prose template rendered the text.
@@ -554,9 +552,9 @@ def test_gap_status_distinguishes_checked_from_uncheckable():
 
 
 def test_reactive_classification_emitted_once_per_chemical_not_per_pair():
-    """Pre-freeze fix, 2026-07-11: nitrogen co-present with 3 other chemicals used to
-    repeat "Nitrogen is classified **Not Chemically Reactive**..." once per pair (3
-    times) in the no-data section, with literal markdown asterisks. It's a property of
+    """Nitrogen co-present with 3 other chemicals would otherwise repeat "Nitrogen is
+    classified **Not Chemically Reactive**..." once per pair (3 times) in the no-data
+    section, with literal markdown asterisks. It's a property of
     the chemical, not of any one pair — must appear exactly once, as its own
     'reactive_classification' statement, plain text, with the CAMEO citation. The
     pair-level 'interaction_no_data' statements must still exist (one per pair, for the
@@ -636,8 +634,8 @@ def test_brief_steps_index_enables_grouping():
 
 
 def test_brief_steps_carry_origin_and_vessel_for_the_thread():
-    """BriefStep.chemicals/vessel are what the carryover thread (UI_Design_Spec.md §6.1)
-    draws from: a token at 'added', a continuing line at 'carried_over', a tick on a
+    """BriefStep.chemicals/vessel are what the carryover thread draws from: a token at
+    'added', a continuing line at 'carried_over', a tick on a
     vessel change. Must survive Stage 4 unchanged from Step.chemicals_present/Step.vessel."""
     result = _demo_extraction_result()
     profiles = _fully_grounded_demo_profiles()
@@ -693,13 +691,13 @@ def test_repeated_pair_across_steps_collapses_to_one_statement():
 
 
 def test_sodium_hypochlorite_sulfuric_acid_interaction_hazard_fires():
-    """The new Salts, Basic x Acids, Strong Oxidizing matrix entry (2026-07-11), end-to-end:
-    sulfuric acid meeting sodium hypochlorite (bleach) in a shared waste carboy must produce
-    a real interaction_hazard statement, not a no-data gap.
+    """The Salts, Basic x Acids, Strong Oxidizing matrix entry, end-to-end: sulfuric acid
+    meeting sodium hypochlorite (bleach) in a shared waste carboy must produce a real
+    interaction_hazard statement, not a no-data gap.
 
     Sodium hypochlorite's reactive_groups are listed in the exact order PubChem's live
-    Reactive Group heading actually returns them (confirmed live 2026-07-11: Salts, Basic
-    first, then Oxidizing Agents, Strong, then Water and Aqueous Solutions) — this matters
+    Reactive Group heading actually returns them (Salts, Basic first, then Oxidizing
+    Agents, Strong, then Water and Aqueous Solutions) — this matters
     because it's ALSO classified Oxidizing Agents, Strong, which is the piranha-solution
     pair's other half. _first_match takes whichever pairing it finds first when walking
     each chemical's reactive_groups in order, so this test locks in that the real ordering

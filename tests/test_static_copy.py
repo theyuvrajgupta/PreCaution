@@ -1,12 +1,11 @@
 """Guards for user-visible copy that a demo-based test can never catch.
 
-The testing principle behind this file (Build_Spec: Prose Segmentation and UI
-Rework): any value hardcoded to the demo's value is invisible to demo-based
-tests, because a hardcode and a correct binding are identical whenever the input
-is the demo. The left-panel caption was literally hardcoded to "piranha" and
-survived ~70 demo runs for exactly this reason. There is no JS test runner in
-this repo, so these assert against the static source directly — enough to fail
-loudly if either fix is reverted.
+The testing principle behind this file: any value hardcoded to the demo's value
+is invisible to demo-based tests, because a hardcode and a correct binding are
+identical whenever the input is the demo. The left-panel caption was literally
+hardcoded to "piranha" and survived ~70 demo runs for exactly this reason. There
+is no JS test runner in this repo, so these assert against the static source
+directly — enough to fail loudly if either binding is reverted.
 """
 
 import shutil
@@ -19,7 +18,7 @@ STATIC = Path(__file__).resolve().parent.parent / "app" / "static"
 
 
 def test_bench_caption_is_generic_not_hardcoded_to_the_demo():
-    """Pass B1: the structural-read caption must be protocol-independent. It prints on
+    """The structural-read caption must be protocol-independent. It prints on
     every protocol, so it can never name the demo's mixture ("piranha")."""
     src = (STATIC / "thread.js").read_text(encoding="utf-8")
     assert "Claude resolved this protocol into its reagents" in src
@@ -29,17 +28,17 @@ def test_bench_caption_is_generic_not_hardcoded_to_the_demo():
 
 
 def test_post_run_empty_state_states_the_finding_not_a_protocol_judgment():
-    """Pass B6: after a run with no chemicals, the copy must state what preCaution
-    knows (it found none), never assert the text "isn't a protocol," which it cannot
+    """After a run with no chemicals, the copy must state what preCaution knows
+    (it found none), never assert the text "isn't a protocol," which it cannot
     judge."""
     src = (STATIC / "app.js").read_text(encoding="utf-8")
     assert "No chemicals were confidently identified in this text." in src
     assert "this doesn't look like one" not in src
 
 
-# Pass B4: sanitizeName is JS, and this repo has no JS test runner, so exercise the
-# REAL shipped function via node (skipped when node isn't installed, same graceful-skip
-# pattern the network/live tests use). Confirmed live: multi-part reagents were leaking
+# sanitizeName is JS, and this repo has no JS test runner, so exercise the REAL shipped
+# function via node (skipped when node isn't installed, same graceful-skip pattern the
+# network/live tests use). Multi-part reagents were leaking
 # Stage-1 scratch-work like "Phenol (25 parts (of 25:24:1 mixture))" into the panel.
 _SANITIZE_NODE_SCRIPT = """
 import {{ sanitizeName, cap }} from {module!r};

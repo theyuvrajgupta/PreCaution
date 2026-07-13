@@ -2,7 +2,7 @@
 
 Two tiers, same pattern as test_extraction.py:
 - Offline parser tests: monkeypatch the network fetch and feed in JSON
-  responses actually captured from PubChem on 2026-07-09 (tests/fixtures/pubchem/).
+  responses actually captured from PubChem (tests/fixtures/pubchem/).
   Fast, deterministic, guards the parsing logic independent of the network.
 - Live integration test: real calls against the public PubChem API (no key
   required). Skipped automatically if the network is unreachable.
@@ -79,8 +79,8 @@ def test_missing_heading_returns_none(monkeypatch):
 
 
 def test_fix_mojibake_reverses_double_encoded_bullet():
-    # Confirmed live 2026-07-10: PubChem's own response bytes for a bullet character
-    # are C3 A2 C2 80 C2 A2 — correctly UTF-8-decoding that (which httpx already does)
+    # PubChem's own response bytes for a bullet character are C3 A2 C2 80 C2 A2 —
+    # correctly UTF-8-decoding that (which httpx already does)
     # yields exactly this 3-codepoint string, not the intended "•" (U+2022).
     corrupted = "â¢ EYEWASH"
     assert pubchem._fix_mojibake(corrupted) == "• EYEWASH"
@@ -121,8 +121,8 @@ def test_safety_note_dedupes_exact_repeated_excerpts(monkeypatch):
 
 
 def test_safety_note_dedupes_cross_label_repeated_excerpts(monkeypatch):
-    # Reproduces the real bug (confirmed live 2026-07-12): hydrogen peroxide's PPE
-    # heading cites the SAME excerpt verbatim under two entirely different labels —
+    # Reproduces the real bug: hydrogen peroxide's PPE heading cites the SAME excerpt
+    # verbatim under two entirely different labels —
     # "ERG Guide 140 [Oxidizers]" and "ERG Guide 143 [Oxidizers (Unstable)]" — with two
     # different CAMEO URLs (890 vs 19279). The per-(label, line) dedup inside the parse
     # loop only catches a repeat WITHIN one label/ReferenceNumber; this is a second,
